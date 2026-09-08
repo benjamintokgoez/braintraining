@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <script>
+      (()=>{const param=new URLSearchParams(window.location.search).get('scoutTheme'); const theme=param||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',theme);})();
+      (() => {
+        const theme = new URLSearchParams(window.location.search).get("scoutTheme");
+        document.documentElement.setAttribute("data-theme", theme === "light" || theme === "dark" ? theme : "dark");
+      })();
+    </script>
+    <title data-i18n="app.title"></title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="i18n.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header id="header">
+      <div class="shell">
+        <div class="header-inner">
+          <a class="brand" href="#home">
+            <svg class="brand-mark" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M13 5H9L4 10v12l5 5h4M19 5h4l5 5v12l-5 5h-4M12 11h8M12 16h8M12 21h8"></path>
+            </svg>
+            <span class="brand-text">Cortex<small><span data-i18n="app.tagline"></span></small></span>
+          </a>
+          <nav class="main-nav">
+            <a href="#home" data-i18n="nav.home"></a>
+            <a href="#results" data-i18n="nav.results"></a>
+            <a href="#reliability" data-i18n="nav.reliability"></a>
+            <a href="#data" data-i18n="nav.data"></a>
+            <a href="#about" data-i18n="nav.about"></a>
+          </nav>
+          <div class="header-controls">
+            <div class="language-control">
+              <label for="language" data-i18n="settings.language"></label>
+              <select id="language" name="language">
+                <option value="en" data-i18n="settings.english"></option>
+                <option value="de" data-i18n="settings.german"></option>
+              </select>
+            </div>
+            <button id="open-settings" class="secondary" type="button" data-i18n="settings.title"></button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="notifications" class="shell" aria-live="polite" aria-atomic="true"></div>
+    <main id="app" class="shell" tabindex="-1"></main>
+
+    <section id="runner" hidden aria-describedby="runner-description">
+      <canvas id="stage" tabindex="0" role="application" aria-describedby="runner-description"></canvas>
+      <div id="runner-description" class="visually-hidden" data-i18n="runner.description"></div>
+      <button id="abort" type="button" data-i18n="runner.abort"></button>
+      <div id="runner-message" role="alert" aria-live="assertive"></div>
+    </section>
+
+    <dialog id="settings-dialog" aria-labelledby="settings-heading">
+      <div class="section-heading">
+        <h2 id="settings-heading" data-i18n="settings.title"></h2>
+        <button id="close-settings" type="button" class="secondary" data-i18n="common.close"></button>
+      </div>
+      <form id="settings-form" class="stack"></form>
+    </dialog>
+
+    <footer class="shell">
+      <span class="local-indicator" aria-hidden="true"></span>
+      <span data-i18n="app.localOnly"></span>
+    </footer>
+  </body>
+</html>
