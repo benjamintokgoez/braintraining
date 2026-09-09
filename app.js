@@ -571,7 +571,7 @@ window.Cortex = {};
   const colors = () => {
     const style = getComputedStyle(document.documentElement);
     return Object.fromEntries(["task-bg", "task-fg", "task-panel", "stim-red", "stim-green", "stim-blue", "stim-yellow",
-      "stim-gray", "accent", "border", "surface", "text", "text-muted"].map(name =>
+      "stim-gray", "accent", "accent-fg", "border", "surface", "text", "text-muted"].map(name =>
       [name, style.getPropertyValue(`--cp-${name}`).trim()]));
   };
   C.Draw = {
@@ -690,67 +690,87 @@ window.Cortex = {};
   };
 
   C.Audio = {
-    context: null, voice: null, stimulusSet: "tones", cache: [],
-    unlock(language, preserveSet = false) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        this.context ||= new AudioContext();
-        this.context.resume().catch(error => {
-          C.notice("audio.unavailable", error.message);
-          C.active?.invalidate("audio.unavailable");
-        });
+    voice: null, pending: null, stimulusSet: null,
+    stimuli: {
+      en: {
+        // Speak letter names, not capital characters that some voices announce as "capital R".
+        letters: ["see", "aitch", "kay", "ell", "cue", "are", "ess", "tee"],
+        words: ["cat", "dog", "fish", "house", "moon", "book", "sun", "tree"]
+      },
+      de: {
+        letters: ["eff", "ha", "ka", "ell", "em", "er", "ess", "weh"],
+        words: ["Ball", "Baum", "Buch", "Fisch", "Haus", "Hund", "Mond", "Stern"]
       }
-      if ("speechSynthesis" in window) {
-        speechSynthesis.cancel();
-        if (!preserveSet) this.voice = speechSynthesis.getVoices().find(v => v.localService && v.lang.toLowerCase().startsWith(language));
-        if (this.voice) {
-          const silent = new SpeechSynthesisUtterance(" ");
-          silent.voice = this.voice; silent.volume = 0; silent.lang = language === "de" ? "de-DE" : "en-US";
-          speechSynthesis.speak(silent);
-        }
-      }
-      this.stimulusSet = this.voice ? `speech-${language}` : "tones";
-      return this.context || this.voice;
     },
-    prepare(values, language) {
-      const letters = language === "de" ? ["F","H","K","L","M","R","S","W"] : ["C","H","K","L","Q","R","S","T"];
+    async unlock(language, kind, preserveVoice = false) {
+      this.stop();
+      if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return false;
+      const findVoice = () => speechSynthesis.getVoices().find(v =>
+        v.localService && v.lang.toLowerCase().startsWith(language));
+      if (!preserveVoice) {
+        this.voice = findVoice();
+        if (!this.voice) {
+          await new Promise(resolve => {
+            const finish = () => {
+              clearTimeout(timer);
+              speechSynthesis.removeEventListener("voiceschanged", changed);
+              resolve();
+            };
+            const changed = () => { if (findVoice()) finish(); };
+            const timer = setTimeout(finish, 1500);
+            speechSynthesis.addEventListener("voiceschanged", changed);
+            changed();
+          });
+          this.voice = findVoice();
+        }
+      }
+      if (!this.voice || !this.voice.localService || !this.voice.lang.toLowerCase().startsWith(language)) return false;
+      this.stimulusSet = `speech-${kind}-${language}`;
+      const silent = new SpeechSynthesisUtterance(" ");
+      silent.voice = this.voice; silent.volume = 0; silent.lang = this.voice.lang;
+      speechSynthesis.speak(silent);
+      return true;
+    },
+    prepare(values, language, kind) {
+      if (!this.voice) throw new Error("audio.unavailable");
       return values.map(value => {
-        if (this.voice) {
-          const utterance = new SpeechSynthesisUtterance(letters[value]);
-          utterance.voice = this.voice; utterance.lang = this.voice.lang; utterance.rate = 1;
-          return { utterance, value };
-        }
-        if (!this.context) return { value };
-        const length = Math.ceil(this.context.sampleRate * .25), buffer = this.context.createBuffer(1, length, this.context.sampleRate);
-        const samples = buffer.getChannelData(0), frequency = 400 * 4 ** (value / 7);
-        for (let i = 0; i < length; i++) {
-          const envelope = Math.min(1, i / 240, (length - i) / 480);
-          samples[i] = Math.sin(2 * Math.PI * frequency * i / this.context.sampleRate) * .15 * envelope;
-        }
-        const source = this.context.createBufferSource();
-        source.buffer = buffer; source.connect(this.context.destination);
-        return { source, value };
+        const utterance = new SpeechSynthesisUtterance(this.stimuli[language][kind][value]);
+        utterance.voice = this.voice; utterance.lang = this.voice.lang; utterance.rate = 1;
+        return { utterance, value };
       });
     },
-    play(sound, trial) {
-      if (sound.utterance) {
-        sound.utterance.onstart = () => { trial.audioOnset = C.now(); };
-        sound.utterance.onerror = event => {
-          if (event.error !== "interrupted" && event.error !== "canceled") {
-            C.active?.invalidate("audio.failed");
-          }
+    async play(sound, trial, maxDurationMs = 3000) {
+      if (this.pending) {
+        this.stop();
+        throw new Error("audio.failed");
+      }
+      return new Promise((resolve, reject) => {
+        const utterance = sound.utterance;
+        const finish = error => {
+          if (this.pending?.utterance !== utterance) return;
+          clearTimeout(timer);
+          this.pending = null;
+          utterance.onstart = utterance.onend = utterance.onerror = null;
+          if (error) reject(error); else resolve();
         };
-        speechSynthesis.speak(sound.utterance);
-      } else if (sound.source) {
-        if (this.context.state !== "running") C.active?.invalidate("audio.failed");
-        else {
-          sound.source.start();
-          trial.audioOnset = C.now(); // Scheduling time; browser/device output latency is not measurable here.
-        }
-      } else C.active?.invalidate("audio.unavailable");
+        const timer = setTimeout(() => {
+          finish(new Error("audio.failed"));
+          speechSynthesis.cancel();
+        }, maxDurationMs);
+        this.pending = { utterance, cancel: () => finish(new DOMException("Aborted", "AbortError")) };
+        utterance.onstart = () => { trial.audioOnset = C.now(); };
+        utterance.onend = () => finish(Number.isFinite(trial.audioOnset) ? null : new Error("audio.failed"));
+        utterance.onerror = () => finish(new Error("audio.failed"));
+        try { speechSynthesis.speak(utterance); }
+        catch (error) { console.error("Speech playback:", error); finish(new Error("audio.failed")); }
+      });
     },
-    stop() { if ("speechSynthesis" in window) speechSynthesis.cancel(); }
+    stop() {
+      this.pending?.cancel();
+      if ("speechSynthesis" in window) speechSynthesis.cancel();
+    }
   };
+  if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
   class Runner {
     constructor(task, params, mode, language, input) {
@@ -764,6 +784,8 @@ window.Cortex = {};
       this.svgScenes = [];
       this.startedAt = C.iso(); this.startTime = C.now();
       this.canvas = document.getElementById("stage"); this.g = this.canvas.getContext("2d");
+      this.responseStatus = document.getElementById("response-status");
+      this.responseStatus.textContent = "";
       const runnerStyle = getComputedStyle(document.getElementById("runner"));
       this.safeBottom = parseFloat(runnerStyle.paddingBottom) || 0;
       this.safeSide = Math.max(parseFloat(runnerStyle.paddingLeft) || 0, parseFloat(runnerStyle.paddingRight) || 0);
@@ -781,24 +803,44 @@ window.Cortex = {};
           if (this.phase === "between") void C.UI.finish(this);
           return;
         }
-        if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+        const key = event.key === " " ? "space" : event.key.toLowerCase();
+        if (event.repeat) {
+          const option = this.current?.options.find(o => o.key.toLowerCase() === key);
+          if (option) {
+            event.preventDefault();
+            if (this.current.panel?.layout === "matches" && this.current.responseEnabled &&
+              !this.current.responses.some(response => response.value === option.value)) {
+              this.setResponseStatus("runner.releaseKey", { key: option.key.toUpperCase() });
+            }
+          }
+          return;
+        }
         if (this.current) {
-          const key = event.key === " " ? "space" : event.key.toLowerCase();
           const option = this.current.options.find(o => o.key.toLowerCase() === key ||
             (key === "enter" && o.key === "Enter") || (key === "backspace" && o.key === "Backspace"));
           if (option || this.current.anywhere && (key === "space" || key === "enter")) {
             event.preventDefault(); this.respond(option?.value ?? 0, "keyboard");
+          } else if (this.current.panel?.layout === "matches" && key.length === 1) {
+            this.setResponseStatus("runner.useMatchKeys", { keys: this.current.options.map(o => o.key.toUpperCase()).join(" / ") });
           }
+        } else if (this.task.id === "dual-nback" && ["practice", "block"].includes(this.phase) && ["a", "l"].includes(key)) {
+          event.preventDefault();
+          this.setResponseStatus("runner.inputWait");
         }
       };
       this.pointerHandler = event => {
         event.preventDefault();
         this.pointers.add(event.pointerId);
-        if (this.pointers.size >= 2) { this.abort(); return; }
-        if (!this.current) return;
+        if (this.pointers.size >= 2 && this.task.id !== "dual-nback") { this.abort(); return; }
+        if (!this.current) {
+          if (this.task.id === "dual-nback") this.setResponseStatus("runner.inputWait");
+          return;
+        }
         const x = event.clientX, y = event.clientY;
         const zone = this.current.zones.find(o => x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h);
         if (zone || this.current.anywhere) this.respond(zone?.value ?? 0, event.pointerType === "touch" ? "touch" : "mouse");
+        else if (this.current.panel?.layout === "matches") this.setResponseStatus("runner.useMatchAreas");
       };
       this.releaseHandler = event => this.pointers.delete(event.pointerId);
       this.focusHandler = () => { if (this.phase === "block" || this.phase === "practice") this.abort("runner.focus"); };
@@ -820,6 +862,11 @@ window.Cortex = {};
       this.feedbackImages = [C.Draw.text("0"), C.Draw.text("1")];
       this.digits = Array.from({ length: 10 }, (_, i) => C.Draw.text(i, 48));
       this.countdownImages = [1, 2, 3].map(n => C.Draw.text(n, 64));
+    }
+    setResponseStatus(key, vars = {}) {
+      const heading = this.current?.responseHeading;
+      const message = [heading, C.t(key, vars)].filter(Boolean).join("\n");
+      if (this.responseStatus.textContent !== message) this.responseStatus.textContent = message;
     }
     invalidate(reason) {
       this.invalid = true;
@@ -844,9 +891,9 @@ window.Cortex = {};
         cols = options.length <= 8 ? 2 : 3;
       }
       let rows = Math.ceil(options.length / cols);
-      const available = Math.min(h * (layout === "words" ? .6 : .41), rows * (layout === "pictures" ? 96 : 60) + gap * (rows - 1));
+      const available = Math.min(h * (layout === "words" ? .6 : .41), rows * (["pictures", "matches"].includes(layout) ? 96 : 60) + gap * (rows - 1));
       const cellH = Math.max(48, (available - gap * (rows - 1)) / rows);
-      const cellW = Math.min(180, (w - margin * 2 - gap * (cols - 1)) / cols);
+      const cellW = Math.min(layout === "matches" ? 260 : 180, (w - margin * 2 - gap * (cols - 1)) / cols);
       const bottomMargin = Math.max(12, this.safeBottom + 8, h * .025);
       const top = h - rows * cellH - gap * (rows - 1) - bottomMargin;
       const left = (w - cols * cellW - gap * (cols - 1)) / 2;
@@ -887,7 +934,7 @@ window.Cortex = {};
           `${zone.key.toUpperCase()}  ${zone.label}` : zone.label;
         g.fillText(label, zone.x + zone.w / 2, y + (pictureLabel ? zone.h - 11 : zone.h / 2), zone.w - 10);
       }
-      return { canvas, zones, top: panelTop, options };
+      return { canvas, zones, top: panelTop, options, layout };
     }
     prepareMatrix(item, panel) {
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -934,6 +981,7 @@ window.Cortex = {};
         } else g.drawImage(scene, x, y, width, height);
       }
       if (panel) g.drawImage(panel.canvas, 0, panel.top);
+      if (panel?.layout === "matches") this.paintMatchControls();
       if (entered.length) {
         const text = entered.map(value => typeof value === "number" ? C.number(value) :
           value === "." ? C.t("response.decimal") : value).join(" ");
@@ -945,20 +993,47 @@ window.Cortex = {};
         g.fillText(C.number(Math.floor(counter)), this.w / 2, this.stimulusHeight / 2);
       }
     }
+    paintMatchControls() {
+      const current = this.current;
+      if (!current || current.panel?.layout !== "matches") return;
+      const g = this.g;
+      for (const zone of current.zones) {
+        const recorded = current.responses.some(response => response.value === zone.value);
+        g.fillStyle = this.palette[recorded ? "accent" : "task-panel"];
+        g.fillRect(zone.x, zone.y, zone.w, zone.h);
+        g.strokeStyle = this.palette[recorded ? "accent" : "stim-gray"];
+        g.lineWidth = recorded ? 3 : 1;
+        g.strokeRect(zone.x + 2, zone.y + 2, zone.w - 4, zone.h - 4);
+        g.fillStyle = this.palette[recorded ? "accent-fg" : "task-fg"];
+        g.textAlign = "center"; g.textBaseline = "middle"; g.font = `600 18px ${font}`;
+        const label = this.input === "keyboard" ? `${zone.key.toUpperCase()} · ${zone.label}` : zone.label;
+        g.fillText(label, zone.x + zone.w / 2, zone.y + zone.h * .34, zone.w - 16);
+        g.font = `600 16px ${font}`;
+        g.fillText(C.t(recorded ? "runner.matchRecorded" : !current.responseEnabled ?
+          "runner.rememberOnly" : "runner.matchReady"), zone.x + zone.w / 2, zone.y + zone.h * .72, zone.w - 16);
+      }
+      const top = current.panel.top - 8;
+      g.fillStyle = this.palette["task-panel"]; g.fillRect(12, top, this.w - 24, 4);
+      g.fillStyle = this.palette["accent"];
+      g.fillRect(12, top, (this.w - 24) * C.clamp(1 - (C.now() - current.startedAt) / current.deadline, 0, 1), 4);
+    }
     async countdown() {
       for (let i = 2; i >= 0; i--) await C.Timing.wait(1000, this.signal, () => this.paint(this.countdownImages[i]));
     }
     async show(scene, ms, panel) {
+      if (!this.current) this.responseStatus.textContent = "";
       return C.Timing.wait(ms, this.signal, () => this.paint(scene, panel));
     }
     respond(value, method) {
       const current = this.current;
       if (!current || current.done && !current.multi) return;
+      if (!current.responseEnabled) { this.setResponseStatus("runner.warmupInput"); return; }
       if (method !== this.input) { this.invalidate("runner.inputChanged"); }
       const time = C.now();
       if (current.falseStartPhase) { current.falseStarts.push(time); return; }
       if (time - current.startedAt >= current.deadline) {
         current.lateResponses.push({ value, time });
+        if (current.panel?.layout === "matches") this.setResponseStatus("runner.inputLate");
         return;
       }
       if (current.interact) {
@@ -973,6 +1048,10 @@ window.Cortex = {};
         this.paint(current.scene, current.panel, update.entered || []);
       } else if (current.multi) {
         if (!current.responses.some(r => r.value === value)) current.responses.push({ value, time });
+        this.paintMatchControls();
+        this.setResponseStatus("runner.inputRecorded", {
+          responses: current.options.filter(option => current.responses.some(r => r.value === option.value)).map(option => option.label).join(" + ")
+        });
       } else if (current.sequence) {
         if (value === "back") current.responses.pop();
         else if (value === "done") { current.done = true; current.submittedAt = time; }
@@ -1004,10 +1083,15 @@ window.Cortex = {};
         responses: [], done: false, multi: spec.multi, sequence: spec.sequence,
         maxLength: spec.maxLength, anywhere: spec.anywhere, scene: spec.scene, falseStarts: [],
         falseStartPhase: spec.falseStartPhase, lateResponses: [], deadline: spec.deadline,
-        interact: spec.interact, displayResponse: spec.displayResponse, trial };
+        interact: spec.interact, displayResponse: spec.displayResponse, trial,
+        responseEnabled: spec.responseEnabled !== false, responseHeading: spec.responseHeading };
       const start = await C.Timing.frame(); this.check();
       current.startedAt = start;
       this.current = current;
+      if (panel?.layout === "matches") {
+        this.responseStatus.style.bottom = `${this.h - panel.top + 20}px`;
+        this.setResponseStatus(current.responseEnabled ? "runner.matchPrompt" : "runner.warmupInput");
+      } else this.responseStatus.textContent = "";
       trial.stimulusOnset = stimulusOnset ?? start;
       trial.rtReferenceOnset = spec.rtFromFirst ? firstOnset ?? start : start;
       trial.presentationOnset = firstOnset ?? start;
@@ -1046,14 +1130,11 @@ window.Cortex = {};
           this.paint(current.scene, panel); hidden = true;
         }
         advanceTimeline(frame);
+        if (panel?.layout === "matches") this.paintMatchControls();
         if (spec.counter) this.paint(null, null, [], frame - start);
-        if (spec.feedbackAt !== undefined && frame - start >= spec.feedbackAt &&
-          (this.mode === "training" || this.phase === "practice")) {
-          const correct = spec.evaluate(current.responses.map(response => response.value), trial);
-          this.paint(this.feedbackImages[Number(correct)], panel);
-        }
       }
       this.current = null;
+      if (panel?.layout === "matches") this.setResponseStatus("runner.responseClosed");
       trial.responses = current.responses;
       trial.lateResponses = current.lateResponses;
       trial.responseTime = spec.rtOnSubmit ? current.submittedAt ?? null : current.responses[0]?.time ?? null;
@@ -1066,7 +1147,7 @@ window.Cortex = {};
       const collection = this.phase === "practice" ? this.practiceTrials : this.trials;
       if (!spec.noRecord) collection.push(trial);
       if ((this.mode === "training" || this.phase === "practice") && !spec.noFeedback && !spec.noRecord) {
-        await this.show(this.feedbackImages[Number(trial.correct)], 250);
+        await this.show((spec.feedbackImages || this.feedbackImages)[Number(trial.correct)], 250);
         if (this.vibration && navigator.vibrate) navigator.vibrate(15);
       }
       return trial;
@@ -1084,6 +1165,7 @@ window.Cortex = {};
     }
     async close() {
       this.current = null; C.Audio.stop();
+      this.responseStatus.textContent = "";
       this.svgScenes.forEach(svg => svg.remove());
       removeEventListener("keydown", this.keyHandler);
       this.canvas.removeEventListener("pointerdown", this.pointerHandler);
@@ -1356,19 +1438,21 @@ window.Cortex = {};
   C.nbackStream = nbackStream;
   C.define("dual-nback", "working-memory", {
     variant: choice(["dual", "position", "audio", "arithmetic"]), n: p(2, 1, 9),
+    audioStimuli: choice(["letters", "words"]),
     stimulusMs: p(500, 200, 1500, 50), isiMs: p(2500, 500, 5000, 100),
     lureShare: p(.2, 0, .8, .05), operand: p(2, 1, 9), blocks: p(2, 1, 8)
   }, {
     languageDependent: true, landscape: true, primaryMetric: "nLevelMean", staircase: "stepwise",
     async run(ctx) {
       const practice = ctx.phase === "practice", q = ctx.params;
-      const state = ctx.state("n", "stepwise", { start: q.n, min: 1, max: 9 });
       const usePosition = q.variant !== "audio", useAudio = ["dual", "audio"].includes(q.variant);
+      const state = ctx.state(useAudio ? `n|${C.Audio.stimulusSet}` : "n", "stepwise", { start: q.n, min: 1, max: 9 });
       const arithmetic = q.variant === "arithmetic";
+      const feedbackImages = ["runner.incorrect", "runner.correct"].map(key => D.text(C.t(key), 36));
       const panel = ctx.prepareOptions([
         ...(usePosition ? [{ value: 0, label: C.t(arithmetic ? "response.match" : "response.position"), key: "a" }] : []),
         ...(useAudio ? [{ value: 1, label: C.t("response.audio"), key: "l" }] : [])
-      ]);
+      ], "matches");
       for (let block = 0; block < (practice ? 1 : q.blocks); block++) {
         const n = practice ? Math.min(2, q.n) : Math.round(state.state.value), count = practice ? 8 : 20 + n;
         const targetCount = practice ? 2 : 6, indices = C.shuffle(Array.from({ length: count - n }, (_, i) => i + n));
@@ -1378,24 +1462,31 @@ window.Cortex = {};
         const position = nbackStream(n, count, positions, Array.from({ length: arithmetic ? 50 : 9 }, (_, i) => i),
           q.lureShare, arithmetic ? q.operand : 0);
         const audio = nbackStream(n, count, audioTargets, [0,1,2,3,4,5,6,7], q.lureShare);
-        const sounds = useAudio ? C.Audio.prepare(audio.values, ctx.language) : [];
+        const sounds = useAudio ? C.Audio.prepare(audio.values, ctx.language, q.audioStimuli) : [];
         const scenes = position.values.map(value => usePosition ? arithmetic ? D.text(C.number(value)) : D.grid(3, [value]) : ctx.blank);
         const title = D.text(C.t("stim.nbackLevel", { n: C.number(n), variant: C.t(`choice.${q.variant}`) }), 30);
         await ctx.show(title, 1500);
         await ctx.countdown();
         const rows = [];
         for (let i = 0; i < count; i++) {
+          let playback;
           rows.push(await ctx.trial({
             scene: scenes[i], panel, deadline: q.stimulusMs + q.isiMs, visibleMs: q.stimulusMs, multi: true,
-            noFeedback: true, feedbackAt: q.stimulusMs + q.isiMs - 250,
+            noFeedback: i < n, feedbackImages, responseEnabled: i >= n,
+            responseHeading: C.t("runner.nbackItem", { item: C.number(i + 1), count: C.number(count), n: C.number(n) }),
             meta: { block, index: i, n, unscored: i < n, position: position.values[i], audio: audio.values[i],
               positionTarget: positions.has(i), audioTarget: audioTargets.has(i),
               positionLure: position.lures[i], audioLure: audio.lures[i],
               isLure: usePosition && position.lures[i] || useAudio && audio.lures[i], usePosition, useAudio },
-            onset: trial => { if (useAudio) C.Audio.play(sounds[i], trial); },
+            onset: trial => {
+              if (useAudio) playback = C.Audio.play(sounds[i], trial, q.stimulusMs + q.isiMs).catch(error => {
+                if (error.name !== "AbortError") { console.error("N-back audio:", error); ctx.abort("audio.failed"); }
+              });
+            },
             evaluate: responses => (!usePosition || responses.includes(0) === positions.has(i)) &&
               (!useAudio || responses.includes(1) === audioTargets.has(i))
           }));
+          if (useAudio) { await playback; ctx.check(); }
         }
         const scored = this.score(S.exclude(rows), q);
         const total = scored.hits + scored.misses;
@@ -1769,12 +1860,32 @@ window.Cortex = {};
       ${settings().mode === "assessment" ? `<p class="notice">${text("runner.noFeedback")}</p>` : ""}
       ${degraded ? `<div class="notice"><span>${text(`mobile.${task.id}`)}</span><button id="dismiss-mobile">${text("common.dismiss")}</button></div>` : ""}
       ${task.id === "ufov" && innerWidth < 600 ? `<p class="warning">${text("mobile.ufov")}</p>` : ""}
-      ${task.id === "dual-nback" && ["dual","audio"].includes(q.variant) ? `<p class="muted">${text("runner.audioNote")}</p>` : ""}
+      ${task.id === "dual-nback" && ["dual","audio"].includes(q.variant) ? `<p class="muted">${text("runner.audioNote")}</p>
+        <div class="inline"><button id="preview-audio">${text("runner.previewAudio")}</button>
+        <span>${text("param.audioStimuli")}: ${text(`choice.${q.audioStimuli}`)}</span></div>
+        <p id="audio-preview-status" role="status"></p>` : ""}
       ${task.id.includes("squared") ? `<p class="muted">${text("about.modesText")}</p>` : ""}
       <div class="actions"><button class="primary" id="start-practice" ${next ? "disabled" : ""}>${text("runner.practice")}</button>
       <button id="task-settings">${text("settings.title")}</button><a href="#home" class="button">${text("common.back")}</a></div>
       ${next ? `<p class="warning">${text("home.assessmentWait", { date: C.date(next) })}</p>` : ""}</section>`;
     document.getElementById("start-practice").onclick = () => startPractice(task);
+    document.getElementById("preview-audio")?.addEventListener("click", async event => {
+      if (C.starting || C.active) return;
+      const button = event.currentTarget, start = document.getElementById("start-practice");
+      const status = document.getElementById("audio-preview-status");
+      C.starting = true; button.disabled = true; start.disabled = true;
+      status.textContent = C.t("runner.audioLoading");
+      try {
+        if (!await C.Audio.unlock(C.language, q.audioStimuli)) throw new Error("runner.unsupportedAudio");
+        await C.Audio.play(C.Audio.prepare([5], C.language, q.audioStimuli)[0], {});
+        status.textContent = C.t("runner.audioPreviewDone");
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error("Audio preview:", error);
+          status.textContent = C.t(error.message === "runner.unsupportedAudio" ? error.message : "audio.failed");
+        }
+      } finally { C.starting = false; button.disabled = false; start.disabled = Boolean(next); }
+    });
     document.getElementById("task-settings").onclick = () => openSettings(task.id);
     document.getElementById("dismiss-mobile")?.addEventListener("click", () => {
       const value = settings(); value.notices[`mobile-${task.id}`] = true; C.Storage.setSettings(value); instructions(task);
@@ -1811,8 +1922,13 @@ window.Cortex = {};
     const q = taskParams(task);
     const parameterError = C.parameterError(task, q);
     if (parameterError) { C.notice(parameterError); return; }
-    if (task.id === "dual-nback" && ["dual","audio"].includes(q.variant) && !C.Audio.unlock(C.language)) {
-      C.notice("runner.unsupportedAudio"); return;
+    if (task.id === "dual-nback" && ["dual","audio"].includes(q.variant)) {
+      C.starting = true;
+      try {
+        if (!await C.Audio.unlock(C.language, q.audioStimuli)) { C.notice("runner.unsupportedAudio"); return; }
+      } catch (error) {
+        console.error("Audio setup:", error); C.notice("runner.unsupportedAudio"); return;
+      } finally { C.starting = false; }
     }
     if (task.landscape && C.device() !== "desktop" && innerWidth < innerHeight && !acceptPortrait) {
       app().innerHTML = `<section class="card stack"><h1>${text("runner.rotate")}</h1><p>${text("runner.rotateHelp")}</p>
@@ -1844,7 +1960,16 @@ window.Cortex = {};
     } catch (error) { await handleRunError(ctx, error); }
   }
   async function runMain(ctx) {
-    if (ctx.phase !== "between") return;
+    if (ctx.phase !== "between" || C.starting) return;
+    if (ctx.task.id === "dual-nback" && ["dual", "audio"].includes(ctx.params.variant)) {
+      C.starting = true;
+      try {
+        if (!await C.Audio.unlock(ctx.language, ctx.params.audioStimuli, true)) { C.notice("runner.unsupportedAudio"); return; }
+      } catch (error) {
+        console.error("Audio setup:", error); C.notice("runner.unsupportedAudio"); return;
+      } finally { C.starting = false; }
+    }
+    if (ctx.phase !== "between" || ctx.signal.aborted) return;
     ctx.w = Math.floor(innerWidth); ctx.h = Math.floor(innerHeight);
     ctx.canvas.width = ctx.w; ctx.canvas.height = ctx.h;
     ctx.stimulusHeight = Math.floor(ctx.h * .57);
@@ -1853,7 +1978,6 @@ window.Cortex = {};
     ctx.phase = "block"; ctx.mainStartTime = C.now(); ctx.mainStartedAt = C.iso();
     // Practice interference does not invalidate a newly stable measured block.
     if (!ctx.signal.aborted) { ctx.invalid = false; ctx.reasons = []; if (ctx.refreshHz < 50) ctx.invalidate("runner.refresh"); }
-    if (ctx.task.id === "dual-nback") C.Audio.unlock(ctx.language, true);
     running(true);
     try { ctx.extra = await ctx.task.run(ctx); await finish(ctx); }
     catch (error) { await handleRunError(ctx, error); }

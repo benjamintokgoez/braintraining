@@ -1036,6 +1036,24 @@ body.running {
   outline: none;
 }
 
+#response-status {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(132px, calc(env(safe-area-inset-bottom) + 120px));
+  color: var(--cp-task-fg);
+  background: var(--cp-task-bg);
+  text-align: center;
+  white-space: pre-line;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+#response-status:empty {
+  display: none;
+}
+
 #abort {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));
