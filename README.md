@@ -1,0 +1,115 @@
+# Cortex
+
+A calm, local-first space for daily memory, attention and reasoning practice. Cortex has 25 timed exercises and an untimed forecasting journal, with English/German interfaces, keyboard/mouse/touch controls, and no account or backend.
+
+## Run locally
+
+Use Node.js 20 or newer for the development tools:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open **http://127.0.0.1:4173**. There is no build step and no production JavaScript dependency. The development server serves application assets only, not the rest of the repository.
+
+For a phone on the same trusted Wi-Fi network:
+
+```sh
+npm run dev -- --host 0.0.0.0 --port 4173
+```
+
+Open `http://<your-computer-LAN-address>:4173` on the phone. Allow local-network access through the computer's firewall if necessary. LAN HTTP supports ordinary practice, but service workers, offline installation and screen wake locks require **HTTPS or localhost**. A phone's `localhost` is the phone, not the computer.
+
+For everyday use, publish `index.html`, `app.js`, `i18n.js`, `styles.css`, `js/`, `icons/`, `manifest.webmanifest` and `sw.js` together on a static HTTPS host. Keep their relative paths and serve `sw.js` without long-lived HTTP caching. Do not publish development dependencies or test artifacts.
+
+Browser data belongs to an **origin**: protocol, hostname and port. Changing from a LAN address to HTTPS, using another browser, or installing in a separate storage context may start with empty data. Export JSON before changing where you use the app; there is no automatic device sync. Opening the HTML directly as a file is not the supported offline-installation path.
+
+## Morning practice
+
+**Today** offers a date-based plan rather than requiring you to choose exercises each morning. The default is a 10-minute template with focus, memory and reasoning rounds. The 15-minute template adds PVT-B; the 20-minute template also adds paired associates.
+
+These are estimated budgets, **not countdown cutoffs**. Warm-ups, pauses and slower answers can add time. A round keeps its full protocol instead of being cut short to meet a budget. Completed and skipped steps persist, so you can return between rounds later that day. An interrupted measured round must be retried, not resumed halfway through.
+
+Routine profiles do not overwrite your saved exercise parameters. Time-budget changes apply to the next routine; an already-started plan stays stable for the current local calendar day. Use **Exercises** for individual practice, search, categories and favorites.
+
+New training setups include eight actual warm-up presentations. Successful warm-up practice makes the same setup eligible for an optional warm-up next time; you can always choose to repeat it. Familiarity depends on parameters, device class, input method, relevant language and protocol. N-back also requires a target-match response for every enabled stream, not just correctly withholding responses.
+
+**Assessments are separate:** they always include eight warm-up presentations, do not adapt their main difficulty or reveal main-round correctness, and retain their configured protocol. Only valid scored assessments start the same-task 14-day cooldown. Interrupted and practice-only attempts do not.
+
+## Mobile, installation and offline use
+
+The interface supports narrow portrait screens, landscape phones and tablet layouts. Response controls have native accessible buttons over the exercise surface, with at least 44 CSS-pixel hit targets after scaling. Arithmetic accepts either decimal separator; n-back supports independent simultaneous touches. Rotation and Tower boards stack in narrow portrait layouts.
+
+Fullscreen is optional and off by default. Wake lock is best-effort; failure does not prevent practice. Choose your orientation before a measured phase: rotating or hiding the app during practice/main interrupts the attempt to avoid silently mixing measurements. Changing orientation between warm-up and main is allowed.
+
+After the first successful online load and service-worker installation, the application shell and exercises reopen offline. Chromium can offer an install prompt; on iPhone/iPad use Safari's **Add to Home Screen**. Availability and storage behavior depend on the browser and OS.
+
+Updates are offered explicitly. They do not automatically reload another tab or interrupt a round. Updating is blocked while starting/running a round, while saved data is pending, or while a forecast draft could not be persisted. Finish the round and save drafts or export pending work first.
+
+Audio n-back uses **local speech voices only**, with distinct letter-name and word sets. Use the audio preview to check the selected language on your device. If a local voice is unavailable, audio practice is blocked with a notice; it does not silently use a remote voice or replace speech with tones.
+
+## Progress and measurement limits
+
+Progress is specific to the exercises practiced, not an IQ score, diagnosis, treatment or guarantee of general cognitive improvement. Read **Evidence & limitations** in the app.
+
+Charts separate training/assessment, parameters, device class, input method, relevant language, stimulus set, protocol and orientation. Keep a consistent setup when comparing scores. Unknown or unavailable statistics, including guarded UFOV thresholds and SSRT estimates, remain unknown rather than becoming zero.
+
+A fully completed training round with only display-timing warnings still counts toward morning practice and weekly activity. Its score remains excluded from comparison charts, its adaptive state is not saved, and it cannot start an assessment cooldown. Other invalid/interrupted attempts do not advance the routine. Timing advisories are compact during practice; complete reasons remain available in the saved round.
+
+Browser timing is not calibrated physical-device latency. The interface has semantic controls, keyboard focus management, contrast coverage and reduced-motion support, but canvas stimuli are **not equivalent nonvisual exercises**. This is not a claim of full WCAG conformance. Local speech, real touch/display latency, notches/safe areas and installed-home-screen behavior still need checking on the actual devices you use.
+
+## Backups and recovery
+
+Open **Your data**, or **Settings > Backups & data**, to export and restore.
+
+- **JSON** is the portable backup format: preferences, session summaries, retained trial rows, adaptive state, routine, used-item history and forecasts. Existing schema-1 backups remain supported.
+- **CSV** is for analysis, not restoration. Formula-like text is neutralized without turning negative numeric values into text formulas.
+- Restore merges records. Identical sessions and trial rows are deduplicated; conflicting sessions are preserved as variants. Repeatedly restoring the same conflict does not create endless copies. Existing local preferences and adaptive state win on a nonempty restore; an empty restore adopts the incoming preferences.
+- Forecast claims/probabilities are immutable after saving. Compatible open-to-resolved imports can update outcomes; incompatible variants require explicit conflict review. Accepting a variant voids the previous non-conflict version rather than silently combining contradictory forecasts.
+
+Data remains in browser `localStorage` under **`cortex.v1`**, with root schema version **1**. Forecast drafts are tab-local in `sessionStorage`; an unsaved draft is not included in a JSON backup. Save it as a forecast before exporting, or copy it out if browser draft storage is unavailable.
+
+Raw trial rows older than **90 days** are pruned on startup and when recording or importing session data. Session summaries and forecasts remain. Quotas vary and can fill earlier: this is not a larger IndexedDB backend or a promise of 90 days of capacity.
+
+If storage fills or becomes unavailable, pending work remains exportable in memory and a warning is shown. **Do not close or reload first.** Export JSON, then use **Manage local data > Delete raw trial data** to remove raw rows while keeping summaries, scores, forecasts and used-item history. If the browser still cannot write, keep the exported backup and restore it in a working storage context.
+
+Unreadable stored data is not silently overwritten. Export the original for recovery and export any new pending work separately before resetting. Deleting all local data requires typing `DELETE`. Browser/private-mode cleanup can remove storage without the app's consent, so keep periodic JSON backups.
+
+Use one active training tab. Idle tabs adopt saved changes; active or pending tabs conservatively refuse to overwrite a change from another tab. If warned, export pending work, reload to adopt the current records, then merge the backup. Browser leave warnings are a convenience, not protection against an OS closing the process.
+
+## Code layout
+
+The app uses deferred classic scripts and attaches shared APIs to `window.Cortex`; translations use `window.CortexI18n`. Keep the dependency order in `index.html`.
+
+| Location | Responsibility |
+| --- | --- |
+| `js/core.js` | Compatible storage, import/export, statistics, adaptation and shared invariants |
+| `js/generators.js` | Reasoning generators and reusable item models |
+| `js/runner.js` | Drawing, local speech, timing, native response controls and runner lifecycle |
+| `js/tasks/` | Six domain modules containing the exercise engines and spatial models |
+| `js/routine.js` | Local-day plans, profiles, completion and warm-up familiarity |
+| `js/forecasting.js` | Drafts, immutable journal actions, pagination and calibration |
+| `js/ui.js` | Navigation, settings, instructions, progress, results and data journeys |
+| `js/pwa.js`, `sw.js` | Installation, safe updates and scoped offline shell caching |
+| `i18n.js`, `styles.css` | Synchronized English/German copy and responsive theme |
+| `app.js` | DOM-ready entrypoint |
+
+Completed session summaries, raw rows, adaptive state, item hashes and routine progress are committed in one storage write before asynchronous screen/resource cleanup. Generators and expensive spatial rendering are lazy; the main canvas's backing resolution is capped at DPR 2.
+
+When adding an application asset, wire it into both `index.html` and the `ASSETS` list in `sw.js` where appropriate. **Bump the `CACHE` version in `sw.js` whenever changed cached assets are shipped.** Otherwise an installed worker can continue serving an old shell. Worker caches are scoped to the app's registration and only store shell assets, not training data.
+
+## Development checks
+
+```sh
+npm run check
+npm test
+npx playwright install chromium webkit
+npm run test:e2e
+```
+
+The syntax check follows browser scripts from `index.html`. Unit/engine tests cover all timed tasks through warm-up and training/assessment paths, input and lifecycle regressions, task models, score guards, storage compatibility and every daily-budget rotation.
+
+Playwright covers desktop Chromium, an Android-profile Chromium browser and an iPhone-profile WebKit browser. Journeys include a complete morning routine through native keyboard/touch handlers, interruptions/resume, all exercise pages in both languages/themes, portrait/landscape scenes, tablet dialogs, journal conflicts, backups, quota/corrupt recovery, contrast, offline navigation and safe worker updates. Browser clocks accelerate durations in tests without shortening production protocols.
+
+Chromium's offline test uses browser offline mode. WebKit's test stops an isolated test-owned origin and confirms service-worker navigation instead, because Playwright WebKit's offline emulation rejects worker responses ([microsoft/playwright#42775](https://github.com/microsoft/playwright/issues/42775)). Emulated coverage does not replace the physical-device checks described above.

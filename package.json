@@ -1,0 +1,18 @@
+{
+  "name": "cortex-practice",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first daily memory, attention and reasoning practice",
+  "scripts": {
+    "dev": "node scripts/serve.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:e2e": "playwright test",
+    "check": "node scripts/check.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

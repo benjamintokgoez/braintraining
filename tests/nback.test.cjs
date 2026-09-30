@@ -1,85 +1,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { readFileSync } = require("node:fs");
-const path = require("node:path");
 const { test } = require("node:test");
-const vm = require("node:vm");
-
-function fixture() {
-  let time = 0;
-  const timers = new Map(), draws = [], nodes = new Map(), spoken = [];
-  const storage = new Map();
-  const context2d = new Proxy({}, {
-    get(target, key) {
-      return key in target ? target[key] : (...args) => draws.push({ method: key, args, color: target.fillStyle });
-    }
-  });
-  const element = () => Object.assign(new EventTarget(), {
-    style: {}, textContent: "", getContext: () => context2d
-  });
-  const speech = Object.assign(new EventTarget(), {
-    voices: [{ lang: "en-US", localService: true }, { lang: "de-DE", localService: true }],
-    getVoices() { return this.voices; },
-    speak(utterance) { spoken.push(utterance); },
-    cancel() {}
-  });
-  const env = {
-    console, Intl, DOMException, AbortController, Event, EventTarget, crypto: globalThis.crypto,
-    navigator: { language: "en", maxTouchPoints: 0 },
-    performance: { timeOrigin: Date.UTC(2026, 0, 1), now: () => time },
-    innerWidth: 1024, innerHeight: 768, devicePixelRatio: 1,
-    screen: { width: 1024, height: 768, orientation: Object.assign(new EventTarget(), { type: "landscape-primary" }) },
-    matchMedia: () => ({ matches: false }),
-    localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
-    addEventListener() {}, removeEventListener() {},
-    document: {
-      documentElement: element(),
-      addEventListener() {},
-      createElement: element,
-      getElementById(id) {
-        if (!nodes.has(id)) nodes.set(id, element());
-        return nodes.get(id);
-      }
-    },
-    getComputedStyle: () => ({ getPropertyValue: name => name, paddingBottom: "0", paddingLeft: "0", paddingRight: "0" }),
-    speechSynthesis: speech,
-    SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
-    setTimeout(fn, ms) { const token = {}; timers.set(token, { fn, ms }); return token; },
-    clearTimeout(token) { timers.delete(token); },
-    requestAnimationFrame(fn) {
-      setImmediate(() => { time += 16; env.onFrame?.(time); fn(time); });
-    }
-  };
-  env.window = env;
-  vm.createContext(env);
-  for (const file of ["i18n.js", "app.js"]) {
-    vm.runInContext(readFileSync(path.join(__dirname, "..", file), "utf8"), env, { filename: file });
-  }
-  const C = env.Cortex;
-  C.Draw.init(); C.Timing.refreshHz = 60;
-  const task = C.Tasks.find(entry => entry.id === "dual-nback");
-  function runner(mode = "training", input = "keyboard") {
-    const ctx = new C.Runner(task, { ...task.params }, mode, "en", input);
-    ctx.phase = "block";
-    return ctx;
-  }
-  function panel(ctx) {
-    return ctx.prepareOptions([
-      { value: 0, label: "Position match", key: "a" },
-      { value: 1, label: "Audio match", key: "l" }
-    ], "matches");
-  }
-  function key(ctx, value, properties = {}) {
-    ctx.keyHandler({ key: value, code: `Key${value.toUpperCase()}`, preventDefault() {}, ...properties });
-  }
-  return { C, env, speech, spoken, draws, timers, task, runner, panel, key,
-    expire(ms) {
-      for (const [token, timer] of [...timers]) if (timer.ms === ms) { timers.delete(token); timer.fn(); }
-    },
-    setTime(value) { time = value; }
-  };
-}
+const { fixture } = require("./helpers/fixture.cjs");
 
 test("letter names and words use local voices and distinct comparison sets", async () => {
   const { C, spoken, task } = fixture();
