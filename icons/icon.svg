@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <title>Bennys Brain Gym</title>
+  <title>BBG</title>
   <style>:root { --cp-bg: #193c2c; --cp-accent: #d2ef93; --cp-memory: #adc4f5; --cp-attention: #efca78; }</style>
   <rect width="192" height="192" fill="var(--cp-bg)"/>
   <g fill="none" stroke="var(--cp-accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" transform="translate(24 14) scale(4.5)">

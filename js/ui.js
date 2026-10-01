@@ -730,7 +730,7 @@
   function exportCSV() {
     const keys = ["id", "taskId", "mode", "startedAt", "durationMs", "language", "deviceClass", "inputMethod", "refreshHz", "viewport",
       "invalid", "invalidReasons", "practiceOnly", "completedMain", "practiceCount", "protocolVersion", "routineId", "params", "score"];
-    C.download(`bennys-brain-gym-${C.iso().slice(0, 10)}.csv`, "\ufeff" + [keys.map(C.csvCell).join(","),
+    C.download(`bbg-${C.iso().slice(0, 10)}.csv`, "\ufeff" + [keys.map(C.csvCell).join(","),
       ...C.Storage.getSessions().map(row => keys.map(key => C.csvCell(row[key])).join(","))].join("\r\n"), "text/csv;charset=utf-8");
   }
   function dataView() {

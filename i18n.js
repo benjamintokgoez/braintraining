@@ -2,12 +2,12 @@
 
 (() => {
   const pairs = {
-    "app.title": ["Bennys Brain Gym", "Bennys Brain Gym"],
+    "app.title": ["BBG", "BBG"],
     "app.description": [
-      "Bennys Brain Gym: challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.",
-      "Bennys Brain Gym: anspruchsvolles Gehirntraining statt einfacher Spielsiege. Adaptive Übungen reagieren auf deine Leistung. Ernsthaft üben, Fortschritt ehrlich einordnen."
+      "BBG - Benny's Brain Gym: challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.",
+      "BBG - Benny's Brain Gym: anspruchsvolles Gehirntraining statt einfacher Spielsiege. Adaptive Übungen reagieren auf deine Leistung. Ernsthaft üben, Fortschritt ehrlich einordnen."
     ],
-    "app.tagline": ["Challenge. Adapt. Train.", "Fordern. Anpassen. Trainieren."],
+    "app.tagline": ["Benny's Brain Gym", "Benny's Brain Gym"],
     "app.localOnly": ["Local only. No account. No network.", "Nur lokal. Kein Konto. Kein Netzwerk."],
     "nav.home": ["Practice", "Üben"],
     "nav.results": ["Results", "Ergebnisse"],
@@ -195,8 +195,8 @@
       "Imported {added} sessions; {conflicts} ID conflicts preserved as separate sessions. Local preferences are retained when data already exists.",
       "{added} Sitzungen importiert; {conflicts} ID-Konflikte als separate Sitzungen erhalten. Lokale Einstellungen bleiben erhalten, wenn bereits Daten vorhanden sind."
     ],
-    "data.schema": ["This backup uses an unsupported schema version. Import a compatible Bennys Brain Gym JSON backup.", "Diese Sicherung verwendet eine nicht unterstützte Schemaversion. Importiere eine kompatible JSON-Sicherung von Bennys Brain Gym."],
-    "data.invalid": ["This is not a valid Bennys Brain Gym backup. Check the file and try an unmodified JSON export.", "Dies ist keine gültige Sicherung von Bennys Brain Gym. Prüfe die Datei und versuche einen unveränderten JSON-Export."],
+    "data.schema": ["This backup uses an unsupported schema version. Import a compatible BBG JSON backup.", "Diese Sicherung verwendet eine nicht unterstützte Schemaversion. Importiere eine kompatible JSON-Sicherung von BBG."],
+    "data.invalid": ["This is not a valid BBG backup. Check the file and try an unmodified JSON export.", "Dies ist keine gültige Sicherung von BBG. Prüfe die Datei und versuche einen unveränderten JSON-Export."],
     "data.duplicate": ["A duplicate session ID was found where it must be unique. The operation was rejected.", "Eine Sitzungs-ID wurde doppelt gefunden, obwohl sie eindeutig sein muss. Der Vorgang wurde abgelehnt."],
     "data.quota": ["Browser storage is full. Pending data remains in memory: export JSON now, then delete raw trial data to free space. Do not close or reload first.", "Der Browserspeicher ist voll. Ungespeicherte Daten bleiben im Arbeitsspeicher: Exportiere jetzt JSON und lösche danach Rohdaten, um Platz zu schaffen. Schließe oder lade die Seite nicht vorher neu."],
     "data.unavailable": ["Browser storage is unavailable or blocked. Data may last only until this page closes. Export JSON before leaving.", "Der Browserspeicher ist nicht verfügbar oder gesperrt. Daten bleiben möglicherweise nur bis zum Schließen dieser Seite erhalten. Exportiere vorher JSON."],
@@ -209,14 +209,14 @@
     "data.rawRows": ["Raw trial rows", "Rohdatenzeilen"],
     "data.sessions": ["Sessions", "Sitzungen"],
     "data.size": ["Stored data size", "Datenumfang"],
-    "data.importHelp": ["Choose a Bennys Brain Gym JSON backup; older backups remain compatible. Matching sessions are merged; conflicting IDs are preserved. Forecast resolution updates are merged, while disagreements are kept as reviewable conflicts and excluded from calibration. Existing local preferences take priority when records exist. CSV exports cannot restore the app.", "Wähle eine JSON-Sicherung von Bennys Brain Gym. Ältere Sicherungen bleiben kompatibel. Identische Sitzungen werden zusammengeführt; ID-Konflikte bleiben erhalten. Prognoseauflösungen werden aktualisiert, widersprüchliche Versionen bleiben als prüfbare, von der Kalibrierung ausgenommene Konflikte erhalten. Bei vorhandenen Einträgen haben lokale Einstellungen Vorrang. CSV-Exporte können die App nicht wiederherstellen."],
+    "data.importHelp": ["Choose a BBG JSON backup; older backups remain compatible. Matching sessions are merged; conflicting IDs are preserved. Forecast resolution updates are merged, while disagreements are kept as reviewable conflicts and excluded from calibration. Existing local preferences take priority when records exist. CSV exports cannot restore the app.", "Wähle eine JSON-Sicherung von BBG. Ältere Sicherungen bleiben kompatibel. Identische Sitzungen werden zusammengeführt; ID-Konflikte bleiben erhalten. Prognoseauflösungen werden aktualisiert, widersprüchliche Versionen bleiben als prüfbare, von der Kalibrierung ausgenommene Konflikte erhalten. Bei vorhandenen Einträgen haben lokale Einstellungen Vorrang. CSV-Exporte können die App nicht wiederherstellen."],
     "data.exportOriginal": ["Export unreadable original", "Unlesbares Original exportieren"],
 
     "about.title": ["Serious training. Honest limits.", "Ernsthaftes Training. Ehrliche Grenzen."],
     "about.purpose": ["A brain gym, not a reward machine", "Ein Gehirn-Gym statt einer Belohnungsmaschine"],
     "about.purposeText": [
-      "Bennys Brain Gym is for people who want challenging, repeatable practice, not manufactured wins, points, badges or streak pressure. Adaptive exercises use your responses to adjust difficulty within your settings and retain eligible progress for the same setup. Non-adaptive tasks and assessments keep their own protocols. This is a serious practice tool, not a diagnosis, treatment or promise of higher intelligence.",
-      "Bennys Brain Gym richtet sich an Menschen, die anspruchsvoll und wiederholbar üben wollen, statt künstliche Siege, Punkte, Abzeichen oder Druck durch Trainingsserien zu sammeln. Adaptive Übungen passen anhand deiner Antworten die Schwierigkeit innerhalb deiner Einstellungen an und speichern geeignete Fortschritte für denselben Aufbau. Nicht adaptive Aufgaben und Messungen behalten ihre eigenen Abläufe. Dies ist ein ernsthaftes Übungswerkzeug, keine Diagnose, Behandlung oder Garantie höherer Intelligenz."
+      "BBG is for people who want challenging, repeatable practice, not manufactured wins, points, badges or streak pressure. Adaptive exercises use your responses to adjust difficulty within your settings and retain eligible progress for the same setup. Non-adaptive tasks and assessments keep their own protocols. This is a serious practice tool, not a diagnosis, treatment or promise of higher intelligence.",
+      "BBG richtet sich an Menschen, die anspruchsvoll und wiederholbar üben wollen, statt künstliche Siege, Punkte, Abzeichen oder Druck durch Trainingsserien zu sammeln. Adaptive Übungen passen anhand deiner Antworten die Schwierigkeit innerhalb deiner Einstellungen an und speichern geeignete Fortschritte für denselben Aufbau. Nicht adaptive Aufgaben und Messungen behalten ihre eigenen Abläufe. Dies ist ein ernsthaftes Übungswerkzeug, keine Diagnose, Behandlung oder Garantie höherer Intelligenz."
     ],
     "about.evidence": ["What training can—and cannot—show", "Was Training zeigen kann – und was nicht"],
     "about.evidenceText": ["Gains on trained tasks are reliable. Near transfer to closely related tasks is generally modest. Against active controls, far transfer to fluid intelligence or everyday cognition is near zero on average. Better scores here primarily demonstrate learning these tasks, not becoming generally smarter.", "Verbesserungen in trainierten Aufgaben sind gut belegt. Nahtransfer auf eng verwandte Aufgaben ist meist gering. Gegenüber aktiven Kontrollgruppen liegt Ferntransfer auf fluide Intelligenz oder Alltagskognition im Mittel nahe null. Bessere Werte hier zeigen vor allem das Erlernen dieser Aufgaben, keine allgemeine Intelligenzsteigerung."],
@@ -1083,13 +1083,13 @@
 });
 
   Object.assign(pairs, {
-    "app.tagline": ["Challenge. Adapt. Train.", "Fordern. Anpassen. Trainieren."],
+    "app.tagline": ["Benny's Brain Gym", "Benny's Brain Gym"],
     "app.localOnly": ["Private by default. Training stays in this browser.", "Privat als Standard. Dein Training bleibt in diesem Browser."],
     "nav.home": ["Today", "Heute"],
     "nav.library": ["Exercises", "Übungen"],
     "nav.results": ["Progress", "Fortschritt"],
     "nav.main": ["Main navigation", "Hauptnavigation"],
-    "nav.more": ["More about Bennys Brain Gym", "Mehr über Bennys Brain Gym"],
+    "nav.more": ["More about BBG", "Mehr über BBG"],
     "nav.skip": ["Skip to content", "Zum Inhalt springen"],
     "nav.notFound": ["This page isn't here.", "Diese Seite gibt es nicht."],
     "nav.notFoundHelp": ["Use the navigation to return to your practice space.", "Kehre über die Navigation zu deinem Training zurück."],
@@ -1230,9 +1230,9 @@
     "data.manage": ["Manage storage & delete data", "Speicher verwalten & Daten löschen"],
     "data.pruneConfirm": ["Delete all raw trial data? Session summaries, scores and forecasts remain. This cannot be undone without a backup.", "Alle Rohdaten der Durchgänge löschen? Sitzungszusammenfassungen, Ergebnisse und Prognosen bleiben erhalten. Ohne Sicherung ist dies nicht rückgängig zu machen."],
     "data.otherTab": ["Another tab changed your data during this session. This tab will not overwrite it. Export any pending work before reloading, then merge your backup from Your data.", "Ein anderer Tab hat während dieser Sitzung Daten geändert. Dieser Tab überschreibt sie nicht. Exportiere ungespeicherte Arbeit vor dem Neuladen und führe die Sicherung danach unter Deine Daten zusammen."],
-    "pwa.title": ["Use Bennys Brain Gym on your phone", "Bennys Brain Gym auf dem Smartphone nutzen"],
-    "pwa.install": ["Install Bennys Brain Gym", "Bennys Brain Gym installieren"],
-    "pwa.installHelp": ["On iPhone or iPad, open Bennys Brain Gym in Safari and choose Share → Add to Home Screen. On Android or desktop, use your browser's Install app option. Once the app has loaded and its offline cache is ready, the exercises work without a connection.", "Öffne Bennys Brain Gym auf dem iPhone oder iPad in Safari und wähle Teilen → Zum Home-Bildschirm. Nutze auf Android oder am Desktop die Option App installieren des Browsers. Nachdem die App geladen und der Offline-Speicher bereit ist, funktionieren die Übungen ohne Verbindung."],
+    "pwa.title": ["Use BBG on your phone", "BBG auf dem Smartphone nutzen"],
+    "pwa.install": ["Install BBG", "BBG installieren"],
+    "pwa.installHelp": ["On iPhone or iPad, open BBG in Safari and choose Share → Add to Home Screen. On Android or desktop, use your browser's Install app option. Once the app has loaded and its offline cache is ready, the exercises work without a connection.", "Öffne BBG auf dem iPhone oder iPad in Safari und wähle Teilen → Zum Home-Bildschirm. Nutze auf Android oder am Desktop die Option App installieren des Browsers. Nachdem die App geladen und der Offline-Speicher bereit ist, funktionieren die Übungen ohne Verbindung."],
     "pwa.originNote": ["Installation and offline caching need HTTPS, or localhost for development. Keep using the same address and browser for your history; phone and desktop storage are separate.", "Installation und Offline-Speicherung benötigen HTTPS oder localhost bei der Entwicklung. Nutze für deinen Verlauf dieselbe Adresse und denselben Browser. Smartphone- und Desktop-Speicher sind getrennt."],
     "pwa.update": ["App update ready", "App-Update bereit"],
     "pwa.updateReady": ["An app update is ready. Use App update ready in the footer between rounds to apply it.", "Ein App-Update ist bereit. Wähle zwischen den Runden App-Update bereit in der Fußzeile, um es anzuwenden."],

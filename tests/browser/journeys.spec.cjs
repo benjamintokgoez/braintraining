@@ -25,7 +25,7 @@ test("all exercises and supporting pages fit desktop and phone viewports in both
       }, { language, theme });
       for (const route of ["home", "library", "results", "data", "about", "reliability", ...ids.map(id => `task/${id}`)]) {
         await open(page, route);
-        await expect(page).toHaveTitle("Bennys Brain Gym");
+        await expect(page).toHaveTitle("BBG");
         await expect(page.locator("body")).not.toContainText("Cortex");
         await noOverflow(page);
       }
@@ -36,6 +36,8 @@ test("all exercises and supporting pages fit desktop and phone viewports in both
   await page.setViewportSize({ width: 320, height: 568 });
   for (const route of ["home", "library", "results", "data", "task/forecasting", "task/mental-rotation", "task/tower-london"]) {
     await open(page, route); await noOverflow(page);
+    await expect(page.locator(".brand small")).toHaveText("Benny's Brain Gym");
+    await expect(page.locator(".brand small")).toBeVisible();
   }
   await open(page);
   await capture(page, testInfo, "today-320");
@@ -46,27 +48,31 @@ test("all exercises and supporting pages fit desktop and phone viewports in both
   await expect(page.locator("#app a[href='#home']")).toBeVisible();
 });
 
-test("Bennys Brain Gym branding and serious adaptive positioning preserve the existing app identity and data", async ({ page }) => {
+test("BBG branding and Benny's Brain Gym subheadline preserve the existing app identity and data", async ({ page }) => {
   await open(page);
   await seedSessions(page, 1);
   await page.evaluate(() => window.Cortex.Storage.setSettings({ favorites: ["number-series"] }));
   const manifest = await (await page.request.get("/manifest.webmanifest")).json();
-  expect(manifest.name).toBe("Bennys Brain Gym");
-  expect(manifest.short_name).toBe("Bennys Gym");
+  expect(manifest.name).toBe("BBG");
+  expect(manifest.short_name).toBe("BBG");
   expect(manifest.id).toBe("./");
   expect(manifest.scope).toBe("./");
   expect(manifest.start_url).toBe("./#home");
   expect(manifest.description).toContain("not easy-win games");
-  await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "Bennys Brain Gym");
+  expect(manifest.description).toContain("Benny's Brain Gym");
+  expect(await (await page.request.get("/icons/icon.svg")).text()).toContain("<title>BBG</title>");
+  await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "BBG");
   for (const language of ["en", "de"]) {
     await page.evaluate(language => {
       window.Cortex.Storage.setSettings({ language });
       window.Cortex.UI.syncPreferences(); window.Cortex.UI.render();
     }, language);
     await page.reload();
-    await expect(page).toHaveTitle("Bennys Brain Gym");
-    await expect(page.locator(".brand")).toHaveAccessibleName("Bennys Brain Gym");
-    await expect(page.locator(".brand-name")).toHaveText("Bennys Brain Gym");
+    await expect(page).toHaveTitle("BBG");
+    await expect(page.locator(".brand")).toHaveAccessibleName("BBG");
+    await expect(page.locator(".brand-name")).toHaveText("BBG");
+    await expect(page.locator(".brand small")).toHaveText("Benny's Brain Gym");
+    await expect(page.locator(".brand small")).toBeVisible();
     const copy = await page.evaluate(() => {
       const C = window.Cortex, stored = JSON.parse(localStorage.getItem("cortex.v1"));
       return {
@@ -78,16 +84,31 @@ test("Bennys Brain Gym branding and serious adaptive positioning preserve the ex
       };
     });
     expect(copy.description).toBe(copy.expectedDescription);
+    expect(copy.description).toContain("BBG - Benny's Brain Gym");
     expect(copy.records).toBe(2);
     expect(copy.favorites).toContain("number-series");
     expect(copy.schema).toBe(1);
     expect(copy.home).toMatch(language === "en" ? /not easy-win games.*Adaptive exercises/ : /statt einfacher Spielsiege.*Adaptive Übungen/);
     expect(copy.library).toMatch(language === "en" ? /no reward loops/ : /keine Belohnungsschleifen/);
-    for (const value of copy.dictionaries) expect(value).not.toMatch(/\bCortex\b/);
+    for (const value of copy.dictionaries) expect(value).not.toMatch(/\b(?:Cortex|Bennys Brain Gym|Bennys Gym)\b/);
     await open(page, "about");
     await expect(page.locator(".prose")).toContainText(language === "en" ? "not manufactured wins" : "statt künstliche Siege");
     await expect(page.locator(".prose")).toContainText(language === "en" ? "Non-adaptive tasks and assessments" : "Nicht adaptive Aufgaben und Messungen");
   }
+});
+
+test.describe("static BBG branding", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("the app name and subheadline are visible without JavaScript", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveTitle("BBG");
+    await expect(page.locator(".brand-name")).toHaveText("BBG");
+    await expect(page.locator(".brand small")).toHaveText("Benny's Brain Gym");
+    await expect(page.locator(".brand small")).toBeVisible();
+    await expect(page.locator("noscript p")).toContainText("BBG (Benny's Brain Gym) needs JavaScript");
+    await noOverflow(page);
+  });
 });
 
 test("search, categories, favorites and training/assessment mode keep clear keyboard focus", async ({ page }) => {
@@ -208,7 +229,7 @@ test("forecast drafts survive reload; immutable entries resolve, filter, calibra
   await capture(page, testInfo, "forecast-resolved");
   const csvDownload = page.waitForEvent("download");
   await page.locator("#forecast-csv").click();
-  expect((await csvDownload).suggestedFilename()).toMatch(/^bennys-brain-gym-forecasts-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect((await csvDownload).suggestedFilename()).toMatch(/^bbg-forecasts-\d{4}-\d{2}-\d{2}\.csv$/);
   page.once("dialog", dialog => dialog.accept());
   await page.locator("[data-forecast-void]").click();
   await expect(page.locator(".forecast-table tbody tr")).toHaveCount(0);
@@ -272,15 +293,19 @@ test("JSON backup, repeated restore and confirmed deletion preserve data and avo
   const download = page.waitForEvent("download");
   await page.locator("#export-json").click();
   const backup = await download, buffer = await readFile(await backup.path());
-  expect(backup.suggestedFilename()).toMatch(/^bennys-brain-gym-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(backup.suggestedFilename()).toMatch(/^bbg-\d{4}-\d{2}-\d{2}\.json$/);
   expect(JSON.parse(buffer).sessions).toHaveLength(2);
   const csvDownload = page.waitForEvent("download");
   await page.locator("#export-csv").click();
-  expect((await csvDownload).suggestedFilename()).toMatch(/^bennys-brain-gym-\d{4}-\d{2}-\d{2}\.csv$/);
+  expect((await csvDownload).suggestedFilename()).toMatch(/^bbg-\d{4}-\d{2}-\d{2}\.csv$/);
   const payload = { name: "cortex-legacy-backup.json", mimeType: "application/json", buffer };
-  await page.locator("#import-file").setInputFiles(payload);
-  await expect(page.locator("#import-status")).not.toBeEmpty();
-  expect(await page.evaluate(() => window.Cortex.Storage.getSessions().length)).toBe(2);
+  for (const name of ["bennys-brain-gym-legacy-backup.json", payload.name]) {
+    await page.locator("#import-status").evaluate(node => { node.textContent = ""; });
+    await page.locator("#import-file").setInputFiles({ ...payload, name });
+    await expect(page.locator("#import-status")).toContainText(await page.evaluate(() =>
+      window.Cortex.t("data.imported", { added: 0, conflicts: 0 })));
+    expect(await page.evaluate(() => window.Cortex.Storage.getSessions().length)).toBe(2);
+  }
   await page.locator(".data-management summary").click();
   await page.locator("#wipe-confirm").fill("delete");
   await page.locator("#wipe-form button").click();

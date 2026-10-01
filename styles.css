@@ -364,8 +364,7 @@ pre {
   letter-spacing: 0.035em;
 }
 
-.brand-name,
-.brand-name > span {
+.brand-name {
   white-space: nowrap;
 }
 
@@ -2110,14 +2109,6 @@ html[data-theme="dark"] textarea::placeholder {
     min-height: 80px;
     flex-wrap: nowrap;
     padding-block: 12px;
-  }
-
-  .brand small {
-    display: none;
-  }
-
-  .brand-name > span {
-    display: block;
   }
 
   .header-controls {

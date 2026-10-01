@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Bennys Brain Gym",
-  "short_name": "Bennys Gym",
-  "description": "Challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.",
+  "name": "BBG",
+  "short_name": "BBG",
+  "description": "BBG - Benny's Brain Gym: challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.",
   "start_url": "./#home",
   "scope": "./",
   "display": "standalone",
