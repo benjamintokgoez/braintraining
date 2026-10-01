@@ -78,7 +78,7 @@ window.Cortex = {};
   const empty = () => ({
     schemaVersion: 1,
     settings: { language: navigator.language.toLowerCase().startsWith("de") ? "de" : "en",
-      mode: "training", vibration: false, fullscreen: false, theme: "system", colorTheme: "rose", routineMinutes: 10,
+      mode: "training", vibration: false, fullscreen: false, theme: "system", colorTheme: "graphite", routineMinutes: 10,
       routineTime: "08:00", routineDays: [1, 2, 3, 4, 5, 6, 0], routineReminders: false, reminderLastDate: null,
       warmupPolicy: "familiar", inputMethod: "auto", favorites: [], practiceReady: {}, taskParams: {}, staircases: {}, notices: {} },
     sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null

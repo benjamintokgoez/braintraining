@@ -10,16 +10,16 @@ test("appearance previews are reversible through Close, Cancel and Escape withou
   for (const close of ["close", "cancel", "escape"]) {
     await page.locator("#open-settings").click();
     await page.locator('[name="theme"]').selectOption("dark");
-    await page.locator('[name="colorTheme"]').selectOption("graphite");
+    await page.locator('[name="colorTheme"]').selectOption("rose");
     await page.locator('[name="routineMinutes"]').selectOption("20");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "rose");
     expect(await page.evaluate(() => window.Cortex.Storage.snapshot())).toEqual(original);
     if (close === "escape") await page.keyboard.press("Escape");
     else await page.locator(close === "close" ? "#close-preferences" : "#cancel-preferences").click();
     await expect(page.locator("#preferences-dialog")).not.toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "rose");
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
     await expect(page.locator("#open-settings")).toBeFocused();
     expect(await page.evaluate(() => window.Cortex.Storage.snapshot())).toEqual(original);
   }
@@ -32,7 +32,7 @@ test("appearance previews are reversible through Close, Cancel and Escape withou
   await expect(page.locator('[name="colorTheme"]')).toHaveValue("amber");
   await expect(page.locator("html")).toHaveAttribute("data-color-theme", "amber");
   await page.locator("#cancel-preferences").click();
-  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "rose");
+  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
 });
 
 test("every color and brightness choice saves, reloads and preserves the started routine", async ({ page }) => {
@@ -88,7 +88,7 @@ test("device brightness is live, respects explicit previews and returns to the c
 test("saved colors and brightness apply before deferred application scripts run", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   await page.addInitScript(() => localStorage.setItem("cortex.v1", JSON.stringify({
-    schemaVersion: 1, settings: { language: "en", theme: "dark", colorTheme: "graphite" },
+    schemaVersion: 1, settings: { language: "en", theme: "dark", colorTheme: "amber" },
     sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null
   })));
   let release;
@@ -97,17 +97,44 @@ test("saved colors and brightness apply before deferred application scripts run"
   try {
     await page.goto("/#home", { waitUntil: "commit" });
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "amber");
     expect(await page.evaluate(() => typeof window.Cortex)).toBe("undefined");
   } finally { release(); }
   await expect(page.locator("#app h1")).toBeVisible();
-  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "amber");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.goto("/?scoutTheme=light#home");
   await expect(page.locator("#app h1")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "amber");
   expect(await page.evaluate(() => window.Cortex.Storage.getSettings().theme)).toBe("dark");
+});
+
+for (const profile of ["fresh", "legacy"]) test(`${profile} profiles default to Graphite before application startup and after reload`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  if (profile === "legacy") await page.addInitScript(() => localStorage.setItem("cortex.v1", JSON.stringify({
+    schemaVersion: 1, settings: { language: "en", theme: "light" },
+    sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null
+  })));
+  let release;
+  const scriptsReady = new Promise(resolve => { release = resolve; });
+  await page.route("**/js/core.js", async route => { await scriptsReady; await route.continue(); });
+  const theme = profile === "fresh" ? "dark" : "light";
+  try {
+    await page.goto("/#home", { waitUntil: "commit" });
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    expect(await page.evaluate(() => typeof window.Cortex)).toBe("undefined");
+  } finally { release(); }
+  await expect(page.locator("#app h1")).toBeVisible();
+  await page.locator("#open-settings").click();
+  await expect(page.locator('[name="colorTheme"]')).toHaveValue("graphite");
+  await expect(page.locator('[name="theme"]')).toHaveValue(profile === "fresh" ? "system" : "light");
+  await page.locator("#close-preferences").click();
+  await page.reload();
+  await expect(page.locator("#app h1")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 });
 
 test("Graphite stays monochrome and settings stay readable in both languages at 320 pixels", async ({ page }, testInfo) => {

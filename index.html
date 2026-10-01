@@ -6,7 +6,7 @@
     <script>
       (() => {
         let preference = new URLSearchParams(window.location.search).get("scoutTheme");
-        let colorTheme = "rose";
+        let colorTheme = "graphite";
         try {
           const settings = JSON.parse(localStorage.getItem("cortex.v1"))?.settings;
           if (preference !== "light" && preference !== "dark") preference = settings?.theme;

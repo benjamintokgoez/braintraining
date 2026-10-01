@@ -7,7 +7,7 @@ const { session } = require("./helpers/session.cjs");
 const plain = value => JSON.parse(JSON.stringify(value));
 const file = value => ({ text: async () => JSON.stringify(value) });
 
-test("legacy appearances gain a Rose accent without changing brightness, history or storage", () => {
+test("legacy appearances gain Graphite without changing brightness, history or storage", () => {
   const source = fixture(), root = source.C.Storage.snapshot();
   delete root.settings.colorTheme;
   root.settings.theme = "dark";
@@ -15,13 +15,39 @@ test("legacy appearances gain a Rose accent without changing brightness, history
   root.routine = source.C.Routine.start();
   const f = fixture({ data: root });
   f.C.UI.syncPreferences();
-  assert.equal(f.C.Storage.getSettings().colorTheme, "rose");
+  assert.equal(f.C.Storage.getSettings().colorTheme, "graphite");
   assert.equal(f.C.Storage.getSettings().theme, "dark");
   assert.equal(f.document.documentElement.dataset.theme, "dark");
-  assert.equal(f.document.documentElement.dataset.colorTheme, "rose");
+  assert.equal(f.document.documentElement.dataset.colorTheme, "graphite");
   assert.deepEqual(plain(f.C.Storage.getSessions()), plain(root.sessions));
   assert.deepEqual(plain(f.C.Storage.getRoutine()), plain(root.routine));
   assert.equal(f.writes, 0);
+});
+
+test("Graphite is the fresh, reset and legacy-backup default while saved color choices survive", async () => {
+  const f = fixture();
+  assert.equal(f.C.Storage.getSettings().colorTheme, "graphite");
+  assert.equal(f.C.Storage.getSettings().theme, "system");
+  assert.equal(f.writes, 0);
+  for (const colorTheme of ["rose", "amber"]) {
+    f.C.Storage.setSettings({ colorTheme, theme: "dark" });
+    const reloaded = fixture({ data: f.storage.get("cortex.v1") });
+    reloaded.C.UI.syncPreferences();
+    assert.equal(reloaded.C.Storage.getSettings().colorTheme, colorTheme);
+    assert.equal(reloaded.document.documentElement.dataset.colorTheme, colorTheme);
+    assert.equal(reloaded.document.documentElement.dataset.theme, "dark");
+  }
+  assert.equal(f.C.Storage.wipe("DELETE"), true);
+  assert.equal(f.C.Storage.getSettings().colorTheme, "graphite");
+  assert.equal(f.C.Storage.getSettings().theme, "system");
+  const legacy = f.C.Storage.snapshot();
+  delete legacy.settings.colorTheme;
+  legacy.settings.theme = "light";
+  const restored = fixture();
+  await restored.C.Storage.importAll(file(legacy));
+  restored.C.UI.syncPreferences();
+  assert.equal(restored.document.documentElement.dataset.colorTheme, "graphite");
+  assert.equal(restored.document.documentElement.dataset.theme, "light");
 });
 
 test("all appearance combinations persist without changing an already-started plan", () => {
@@ -115,7 +141,7 @@ test("idle tabs adopt saved palettes without overwriting active or pending work"
       assert.equal(f.document.documentElement.dataset.colorTheme, "graphite");
       assert.equal(f.C.Storage.pending, false);
     } else {
-      assert.equal(f.C.Storage.getSettings().colorTheme, state === "pending" ? "amber" : "rose");
+      assert.equal(f.C.Storage.getSettings().colorTheme, state === "pending" ? "amber" : "graphite");
       f.C.active = null;
       assert.equal(f.C.Storage.setSettings({ colorTheme: "rose" }), false);
       assert.equal(f.storage.get("cortex.v1"), raw);
