@@ -2,47 +2,10 @@
 
 const { test, expect } = require("@playwright/test");
 const { readFile } = require("node:fs/promises");
-const { open, noOverflow, seedSessions, capture, enableClock, playPhase } = require("./helpers.cjs");
+const { open, noOverflow, contrastFailures, seedSessions, capture, enableClock, playPhase } = require("./helpers.cjs");
 
-async function contrastFailures(page) {
-  return page.evaluate(() => {
-    const parse = value => {
-      const parts = value.match(/[\d.]+/g)?.map(Number);
-      return parts?.length >= 3 ? [...parts.slice(0, 3), parts[3] ?? 1] : null;
-    };
-    const mix = (foreground, background) => foreground.slice(0, 3).map((value, index) =>
-      value * foreground[3] + background[index] * (1 - foreground[3]));
-    const luminance = rgb => rgb.map(value => value / 255).map(value =>
-      value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
-      .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), failures = [];
-    let node;
-    while ((node = walker.nextNode())) {
-      const element = node.parentElement;
-      if (!node.textContent.trim() || !element || element.closest("script, style, .visually-hidden, [aria-hidden='true'], :disabled")) continue;
-      const style = getComputedStyle(element), rect = element.getBoundingClientRect();
-      if (rect.width < 2 || rect.height < 2 || style.visibility !== "visible") continue;
-      const foreground = parse(element instanceof SVGElement ? style.fill : style.color);
-      if (!foreground) continue;
-      const layers = [];
-      for (let parent = element; parent; parent = parent.parentElement) {
-        const color = parse(getComputedStyle(parent).backgroundColor);
-        if (color?.[3]) layers.unshift(color);
-      }
-      let background = [255, 255, 255];
-      for (const layer of layers) background = mix(layer, background);
-      const a = luminance(mix(foreground, background)), b = luminance(background);
-      const ratio = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
-      const size = parseFloat(style.fontSize), large = size >= 24 || size >= 18.66 && Number(style.fontWeight) >= 700;
-      if (ratio + .015 < (large ? 3 : 4.5)) failures.push({
-        text: node.textContent.trim().slice(0, 80), ratio: Number(ratio.toFixed(2)), tag: element.tagName, className: element.getAttribute("class")
-      });
-    }
-    return failures;
-  });
-}
-
-test("rendered interface text meets contrast thresholds in both themes, including charts and mobile tables", async ({ page }) => {
+test("rendered interface text meets contrast thresholds in every color and brightness theme, including charts and mobile tables", async ({ page }) => {
+  test.setTimeout(120000);
   await open(page);
   await seedSessions(page, 2);
   await page.evaluate(() => {
@@ -50,47 +13,66 @@ test("rendered interface text meets contrast thresholds in both themes, includin
     const entry = C.Storage.createForecast({ claim: "Finish practice before breakfast.", probability: .75, resolveBy: C.today(), language: "en" }).entry;
     C.Storage.resolveForecast(entry.id, 1);
   });
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(theme => { window.Cortex.Storage.setSettings({ theme }); window.Cortex.UI.render(); }, theme);
+  for (const colorTheme of ["rose", "graphite", "amber"]) for (const theme of ["light", "dark"]) {
+    const appearance = `${colorTheme} ${theme}`;
+    await page.evaluate(value => {
+      window.Cortex.Storage.setSettings(value); window.Cortex.UI.syncPreferences(); window.Cortex.UI.render();
+    }, { theme, colorTheme });
     for (const route of ["home", "library", "results", "data", "about", "task/forecasting", "task/number-series"]) {
       await open(page, route);
       if (route === "results") await page.locator("#result-task").selectOption("flanker-squared");
-      expect(await contrastFailures(page), `${theme} ${route}`).toEqual([]);
+      expect(await contrastFailures(page), `${appearance} ${route}`).toEqual([]);
       await noOverflow(page);
     }
+    await page.locator("#open-settings").click();
+    await page.locator("#practice-reminders summary").click();
+    expect(await contrastFailures(page), `${appearance} practice settings`).toEqual([]);
+    await page.locator("#close-preferences").click();
+    await page.locator("#share-app").click();
+    expect(await contrastFailures(page), `${appearance} sharing`).toEqual([]);
+    await page.locator("#close-share").click();
   }
 });
 
 test("category colors, focus and exercise palettes remain accessible and consistent across appearances", async ({ page }) => {
   await open(page);
   let exercisePalette;
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate(theme => {
-      window.Cortex.Storage.setSettings({ theme });
-      window.Cortex.UI.render();
-    }, theme);
+  for (const colorTheme of ["rose", "graphite", "amber"]) for (const theme of ["light", "dark"]) {
+    const appearance = `${colorTheme} ${theme}`;
+    await page.evaluate(value => {
+      window.Cortex.Storage.setSettings(value); window.Cortex.UI.syncPreferences(); window.Cortex.UI.render();
+    }, { theme, colorTheme });
     const palette = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement);
       const color = name => style.getPropertyValue(`--cp-${name}`).trim();
-      const luminance = hex => {
-        if (!/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(hex)) throw new Error(`Expected hex color: ${hex}`);
-        const value = hex.length === 4 ? [...hex.slice(1)].map(char => char + char).join("") : hex.slice(1);
-        return value.match(/../g).map(channel => parseInt(channel, 16) / 255)
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const rgba = value => {
+        if (!CSS.supports("color", value)) throw new Error(`Invalid theme color: ${value}`);
+        context.clearRect(0, 0, 1, 1); context.fillStyle = value; context.fillRect(0, 0, 1, 1);
+        const channels = [...context.getImageData(0, 0, 1, 1).data];
+        return [...channels.slice(0, 3), channels[3] / 255];
+      };
+      const composite = (foreground, background) => foreground.slice(0, 3)
+        .map((channel, index) => channel * foreground[3] + background[index] * (1 - foreground[3]));
+      const luminance = rgb => rgb.map(channel => channel / 255)
           .map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
           .reduce((sum, channel, index) => sum + channel * [.2126, .7152, .0722][index], 0);
-      };
       const ratio = (foreground, background) => {
-        const a = luminance(color(foreground)), b = luminance(color(background));
+        const base = composite(rgba(color(background)), rgba(color("bg")));
+        const a = luminance(composite(rgba(color(foreground)), base)), b = luminance(base);
         return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
       };
-      const text = ["accent", "memory", "attention", "reasoning", "learning", "calibration"]
+      const text = ["memory", "attention", "reasoning", "learning", "calibration"]
         .map(name => ({ name, ratio: ratio(name, `${name}-soft`) }));
+      text.push({ name: "selected accent", ratio: ratio("accent", "selected-bg") });
       text.push({ name: "primary button", ratio: ratio("accent-fg", "accent") });
-      for (const name of ["hero-text", "hero-muted", "hero-lime", "hero-blue", "hero-gold"]) {
+      for (const name of ["hero-text", "hero-muted", "hero-accent", "hero-memory", "hero-attention"]) {
         text.push({ name, ratio: ratio(name, "hero-bg") });
       }
       const nonText = ["bg", "surface", "bg-elevated", "surface-soft", "memory-soft", "reasoning-soft"]
-        .flatMap(background => ["accent", "border-strong"].map(foreground =>
+        .flatMap(background => ["accent", "control-border"].map(foreground =>
           ({ name: `${foreground} on ${background}`, ratio: ratio(foreground, background) })));
       nonText.push({ name: "exercise focus", ratio: ratio("task-accent", "task-bg") });
       return {
@@ -102,8 +84,8 @@ test("category colors, focus and exercise palettes remain accessible and consist
         themeColor: document.querySelector('meta[name="theme-color"]').content
       };
     });
-    for (const color of palette.text) expect(color.ratio, `${theme}: ${color.name}`).toBeGreaterThanOrEqual(4.5);
-    for (const color of palette.nonText) expect(color.ratio, `${theme}: ${color.name}`).toBeGreaterThanOrEqual(3);
+    for (const color of palette.text) expect(color.ratio, `${appearance}: ${color.name}`).toBeGreaterThanOrEqual(4.5);
+    for (const color of palette.nonText) expect(color.ratio, `${appearance}: ${color.name}`).toBeGreaterThanOrEqual(3);
     expect(palette.themeColor).toBe(palette.background);
     expect(palette.renderedAccent).toBe(palette.exercise["task-accent"]);
     if (exercisePalette) expect(palette.exercise).toEqual(exercisePalette);
@@ -126,7 +108,7 @@ test("category colors, focus and exercise palettes remain accessible and consist
     });
     expect(focus).toEqual({ width: "3px", style: "solid" });
     await page.locator(".task-card").first().hover();
-    expect(await contrastFailures(page), `${theme}: hovered library`).toEqual([]);
+    expect(await contrastFailures(page), `${appearance}: hovered library`).toEqual([]);
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(page);
@@ -200,6 +182,7 @@ test("phone and tablet layouts keep both settings dialogs within the viewport an
       expect(bounds.top).toBeGreaterThanOrEqual(0);
       expect(bounds.right).toBeLessThanOrEqual(viewport.width);
       expect(bounds.bottom).toBeLessThanOrEqual(viewport.height);
+      if (settings.dialog === "#preferences-dialog") await page.locator("#practice-reminders summary").click();
       const targets = await page.locator(`${settings.dialog} :is(button, select, textarea, input:not([type="checkbox"]))`).evaluateAll(elements =>
         elements.map(element => element.getBoundingClientRect().height));
       for (const height of targets) expect(height).toBeGreaterThanOrEqual(44);

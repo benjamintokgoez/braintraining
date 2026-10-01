@@ -421,6 +421,10 @@ test("an installed app shell, exercises, preferences and saved records reopen of
         navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true }));
     });
     await expect(page.locator('[data-notice="pwa.updateReady"]')).toHaveCount(0);
+    await page.evaluate(() => {
+      const C = window.Cortex;
+      C.Storage.setSettings({ theme: "dark", colorTheme: "graphite" }); C.UI.syncPreferences(); C.UI.render();
+    });
     // WebKit's offline flag rejects even literal worker responses: microsoft/playwright#42775.
     // Stopping this test-owned origin verifies the real cached path without that emulation bug.
     if (browserName === "webkit") await stop();
@@ -428,6 +432,17 @@ test("an installed app shell, exercises, preferences and saved records reopen of
     const response = await page.reload();
     expect(response.fromServiceWorker()).toBe(true);
     await expect(page.locator("#start-routine")).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+    expect(await page.evaluate(() => typeof window.Cortex.Reminders.check)).toBe("function");
+    await page.locator("#open-settings").click();
+    await page.locator('[name="routineTime"]').fill("18:30");
+    await page.locator("#save-preferences").click();
+    await expect(page.locator(".routine-card h2")).toHaveText("Evening practice");
+    await expect(page.locator("html")).toHaveAttribute("data-color-theme", "graphite");
+    await page.locator("#share-app").click();
+    await expect(page.locator("#share-link")).toHaveValue(`${origin}/#home`);
+    await page.locator("#close-share").click();
     await open(page, "task/number-series", origin);
     await expect(page.locator("#start-practice")).toBeVisible();
     await open(page, "results", origin);

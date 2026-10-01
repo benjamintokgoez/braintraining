@@ -14,6 +14,7 @@
   let filterDevice = C.device(), filterInput = C.input, overlay = false, historyMode = "training", historyPage = 0;
   let selectedJourneyKey = null, journeyMetric = null;
   let libraryDomain = "all", librarySearch = "", favoritesOnly = false, startVersion = 0;
+  let appearancePreview = null;
   const dialogOpeners = new WeakMap();
   function showDialog(dialog, opener) {
     if (dialog.open) return;
@@ -104,12 +105,23 @@
   const minutes = count => text("routine.minutes", { count: C.number(count, 0) });
   const durationLabel = ms => ms < 60000 ? text("routine.seconds", { count: C.number(Math.round(ms / 1000), 0) }) :
     minutes(Math.round(ms / 60000));
-  function applyTheme() {
+  function scheduleHTML(planned) {
+    const preferred = planned.time ? new Intl.DateTimeFormat(C.language, { hour: "numeric", minute: "2-digit" })
+      .format(new Date(2000, 0, 3, planned.hour, planned.minute)) : "";
+    const label = !planned.days.length ? "routine.unscheduled" : !planned.scheduledToday ? "routine.restDay" :
+      planned.time ? "routine.preferredToday" : "routine.preferredDays";
+    const next = planned.next && (!planned.scheduledToday || C.today(planned.next) !== planned.date) ?
+      `<p class="fine-print">${text("routine.nextPreferred", { date: new Intl.DateTimeFormat(C.language,
+        { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(planned.next) })}</p>` : "";
+    return `<div class="routine-schedule"><p class="muted">${text(label, { time: preferred })}</p>${next}</div>`;
+  }
+  function applyTheme(value = appearancePreview || settings()) {
     const param = new URLSearchParams(location.search).get("scoutTheme");
-    const preference = settings().theme;
+    const preference = value.theme;
     const theme = ["light", "dark"].includes(param) ? param : preference === "system" ?
       matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light" : preference;
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.colorTheme = value.colorTheme;
     const color = getComputedStyle(document.documentElement).getPropertyValue("--cp-bg").trim();
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
     C.Draw.init();
@@ -165,6 +177,7 @@
   function home() {
     const sessions = C.Storage.getSessions(), activity = weeklyActivity(sessions), routine = C.Routine.preview();
     const saved = C.Routine.current(), done = saved && C.Routine.isDone(saved);
+    const planned = C.Routine.schedule();
     const completed = routine.steps.filter(step => step.sessionId).length;
     app().innerHTML = `<section class="hero morning-hero"><div class="hero-copy"><span class="eyebrow">${esc(new Intl.DateTimeFormat(C.language,
       { weekday: "long", month: "long", day: "numeric" }).format(new Date(`${C.today()}T12:00:00`)))}</span>
@@ -173,12 +186,14 @@
         `<span data-domain="${domain}">${domainIcon(domain)}${text(`domain.${domain}`)}</span>`).join("")}</div>
       </div>${orbitArt()}</section>
       <div class="morning-grid"><section class="card routine-card"><div class="section-heading"><div>
-      <span class="eyebrow">${text("routine.eyebrow")}</span><h2>${text("routine.title")}</h2></div>
+      <span class="eyebrow">${text("routine.eyebrow")}</span><h2>${text(planned.titleKey)}</h2></div>
       <span class="tag">${icon("clock")}${minutes(routine.minutes)}</span></div>
+      ${scheduleHTML(planned)}
       <p class="muted">${text(done ? "routine.finishedCount" : saved ? "routine.resumeHelp" : "routine.intro",
         { done: C.number(completed), total: C.number(routine.steps.length) })}</p>${planHTML(routine)}
       <div class="actions"><button class="primary" id="start-routine">${text(done ? "routine.review" :
-        saved ? "routine.resume" : "routine.start")}${icon("arrow")}</button>
+        saved ? "routine.resume" : planned.days.length && !planned.scheduledToday ? "routine.optionalStart" :
+          "routine.start")}${icon("arrow")}</button>
       ${!saved ? `<button id="routine-preferences" class="secondary">${text("routine.adjust")}</button>` : ""}</div>
       <p class="fine-print">${text("routine.estimateNote")}</p></section>
       <aside class="stack"><section class="card consistency-card"><span class="eyebrow">${text("home.week")}</span>
@@ -248,7 +263,7 @@
     const next = mode === "assessment" ? cooldown(task.id) : null;
     const familiar = C.Routine.canSkipPractice(task, q, mode);
     const guide = task.id === "dual-nback" ? `guide.nback.${q.variant}` : `guide.${task.id}`;
-    app().innerHTML = `${context ? `<div class="routine-banner"><a href="#home">${text("routine.title")}</a>
+    app().innerHTML = `${context ? `<div class="routine-banner"><a href="#home">${text(C.Routine.titleKey())}</a>
       <span>${text("routine.round", { current: C.number(context.index + 1), total: C.number(context.routine.steps.length) })}</span>
       <span>${text("mode.training")}</span></div>` : `<a class="back-link" href="#library">${text("runner.backLibrary")}</a>`}
       <section class="hero task-hero" data-domain="${esc(category(task))}">${domainLabel(task)}<h1>${esc(taskTitle(task, q))}</h1><p>${text(task.descKey)}</p>
@@ -598,6 +613,12 @@
     const times = rows.map(row => Date.parse(row.startedAt)), xMin = Math.min(...times), xMax = Math.max(...times);
     const x = row => 64 + (xMax === xMin ? .5 : (Date.parse(row.startedAt) - xMin) / (xMax - xMin)) * plotW;
     const y = value => 20 + plotH - (value - yMin) / (yMax - yMin) * plotH;
+    const marker = (variant, cx, cy) => [
+      `<circle cx="${cx}" cy="${cy}" r="4"/>`,
+      `<rect x="${cx - 4}" y="${cy - 4}" width="8" height="8"/>`,
+      `<path d="M${cx} ${cy - 5}l5 5-5 5-5-5Z"/>`,
+      `<path d="M${cx} ${cy - 5}l5 9H${cx - 5}Z"/>`
+    ][variant];
     let svg = `<svg viewBox="0 0 ${width} 240" role="img" aria-label="${esc(title)}">`;
     for (let index = 0; index < 5; index++) {
       const value = yMin + (yMax - yMin) * index / 4;
@@ -608,14 +629,18 @@
     let index = 0;
     for (const group of groups.values()) {
       const sample = group[0], other = sample.deviceClass !== filterDevice || sample.inputMethod !== filterInput;
-      const color = ["--cp-accent", "--cp-link", "--cp-success", "--cp-text-soft"][index % 4];
+      const variant = index % 4, dash = ["none", "8 4", "2 3", "8 3 2 3"][variant];
+      const color = ["--cp-accent", "--cp-link", "--cp-success", "--cp-text-soft"][variant];
       const label = `${C.t("results.series")} ${++index} · ${C.t(`score.${sample.plottedMetric}`)} · ${C.t(`device.${sample.deviceClass}`)} /
         ${C.t(`input.${sample.inputMethod}`)} · ${C.t(`layout.${C.layoutOrientation(sample.viewport)}`)}${task.languageDependent ? ` · ${sample.language.toUpperCase()}` : ""}`;
-      svg += `<polyline fill="none" stroke="var(${color})" opacity="${other ? .45 : 1}" stroke-width="2"
+      svg += `<polyline fill="none" stroke="var(${color})" opacity="${other ? .45 : 1}" stroke-width="2" stroke-dasharray="${dash}"
         points="${group.map(row => `${x(row)},${y(row.plottedValue)}`).join(" ")}"/>`;
-      for (const row of group) svg += `<circle cx="${x(row)}" cy="${y(row.plottedValue)}" r="4" fill="var(${color})">
-        <title>${esc(`${C.date(row.startedAt)} · ${label} · ${C.metric(row.plottedMetric, row.plottedValue)}`)}</title></circle>`;
-      legend.push(`<li><span class="series-key" style="--cp-series-color:var(${color})">${esc(label)}</span><details><summary>${text("results.parameters")}</summary>
+      for (const row of group) svg += `<g class="series-point" data-marker="${variant}" fill="var(${color})">
+        <title>${esc(`${C.date(row.startedAt)} · ${label} · ${C.metric(row.plottedMetric, row.plottedValue)}`)}</title>
+        ${marker(variant, x(row), y(row.plottedValue))}</g>`;
+      legend.push(`<li><span class="series-key"><svg class="series-symbol" viewBox="0 0 32 16" aria-hidden="true">
+        <line x1="0" x2="32" y1="8" y2="8" stroke="var(${color})" stroke-width="2" stroke-dasharray="${dash}"/>
+        <g fill="var(${color})">${marker(variant, 16, 8)}</g></svg>${esc(label)}</span><details><summary>${text("results.parameters")}</summary>
         <code>${esc(C.canonical(sample.params))}</code><p>${text("results.stimulusSet")}: ${text(`stimulus.${sample.stimulusSet}`)}</p>
         <p>${text("results.protocolVersion", { count: C.number(sample.protocolVersion || 1) })}</p>${processingDeadline(sample)}</details></li>`);
     }
@@ -799,17 +824,40 @@
   function openPreferences(event) {
     if (C.active || C.starting) return;
     const dialog = document.getElementById("preferences-dialog"), form = document.getElementById("preferences-form"), value = settings();
-    form.innerHTML = `<fieldset class="stack"><legend>${text("routine.title")}</legend><div class="settings-grid">
+    let permissionPending = false;
+    form.innerHTML = `<fieldset class="stack"><legend>${text("preferences.appearance")}</legend><div class="settings-grid">
+      <label class="field">${text("preferences.theme")}<select name="theme" aria-describedby="appearance-help">
+      ${["system", "light", "dark"].map(theme => `<option value="${theme}" ${value.theme === theme ? "selected" : ""}>
+        ${text(`preferences.theme.${theme}`)}</option>`).join("")}</select></label>
+      <label class="field">${text("preferences.colorTheme")}<select name="colorTheme" aria-describedby="appearance-help">
+      ${["rose", "graphite", "amber"].map(colorTheme => `<option value="${colorTheme}" ${value.colorTheme === colorTheme ? "selected" : ""}>
+        ${text(`preferences.colorTheme.${colorTheme}`)}</option>`).join("")}</select></label></div>
+      <span class="appearance-sample" aria-hidden="true">${text("preferences.accentPreview")}</span>
+      <p id="appearance-help" class="fine-print">${text("preferences.appearanceHelp")}</p></fieldset>
+      <fieldset class="stack"><legend>${text("routine.title")}</legend><div class="settings-grid">
       <label class="field">${text("preferences.budget")}<select name="routineMinutes">${[10, 15, 20].map(count =>
         `<option value="${count}" ${count === value.routineMinutes ? "selected" : ""}>${minutes(count)}</option>`).join("")}</select></label>
+      <label class="field">${text("preferences.practiceTime")}<input name="routineTime" type="time" value="${esc(value.routineTime)}"
+        aria-describedby="practice-schedule-help"></label></div>
+      <fieldset class="practice-days"><legend>${text("preferences.practiceDays")}</legend><div class="weekday-grid">
+      ${C.Routine.weekdays.map(day => `<label><input name="routineDays" type="checkbox" value="${day}"
+        ${value.routineDays.includes(day) ? "checked" : ""}>${esc(new Intl.DateTimeFormat(C.language,
+          { weekday: "long" }).format(new Date(2026, 0, 4 + day, 12)))}</label>`).join("")}</div></fieldset>
+      <p id="practice-schedule-help" class="fine-print">${text("preferences.scheduleHelp")}</p>
       <label class="field">${text("preferences.warmup")}<select name="warmupPolicy">${["familiar", "always"].map(policy =>
         `<option value="${policy}" ${value.warmupPolicy === policy ? "selected" : ""}>${text(`preferences.warmup.${policy}`)}</option>`).join("")}</select></label>
-      </div><p class="fine-print">${text("preferences.protocolNote")}</p></fieldset>
+      <p class="fine-print">${text("preferences.protocolNote")}</p></fieldset>
+      <details id="practice-reminders"><summary>${text("preferences.reminders")}</summary><div class="stack">
+      <label><input name="routineReminders" type="checkbox" ${value.routineReminders ? "checked" : ""}
+        aria-describedby="reminder-help reminder-support">${text("reminders.title")}</label>
+      <p id="reminder-help" class="fine-print">${text("reminders.help")}</p>
+      <p id="reminder-support" role="status" aria-live="polite"></p>
+      <button id="export-calendar" class="secondary" type="button">${text("preferences.calendar")}</button>
+      <p id="calendar-schedule-error" class="fine-print" hidden>${text("preferences.reminderScheduleRequired")}</p>
+      <p class="fine-print">${text("preferences.calendarHelp")}</p></div></details>
       <div class="settings-grid"><label class="field">${text("settings.language")}<select id="language" name="language">
       ${["en", "de"].map(language => `<option value="${language}" ${C.language === language ? "selected" : ""}>
         ${text(language === "en" ? "settings.english" : "settings.german")}</option>`).join("")}</select></label>
-      <label class="field">${text("preferences.theme")}<select name="theme">${["system", "light", "dark"].map(theme =>
-        `<option value="${theme}" ${value.theme === theme ? "selected" : ""}>${text(`preferences.theme.${theme}`)}</option>`).join("")}</select></label>
       <label class="field">${text("preferences.input")}<select name="inputMethod">${["auto", "keyboard", "touch", "mouse"].map(method =>
         `<option value="${method}" ${(value.inputMethod || "auto") === method ? "selected" : ""}>
         ${text(method === "auto" ? "preferences.input.auto" : `input.${method}`)}</option>`).join("")}</select></label></div>
@@ -818,22 +866,128 @@
       <details><summary>${text("pwa.title")}</summary><p>${text("pwa.installHelp")}</p>
       ${C.PWA.installable && !C.PWA.standalone ? `<button type="button" id="install-app" class="secondary">${text("pwa.install")}</button>` : ""}
       <p class="fine-print">${text("pwa.originNote")}</p></details><div class="actions">
-      <button class="primary" type="submit">${text("preferences.save")}</button>
+      <button id="save-preferences" class="primary" type="submit">${text("preferences.save")}</button>
+      <button id="cancel-preferences" class="secondary" type="button">${text("common.cancel")}</button>
+      <button id="preferences-share" class="secondary" type="button">${text("share.open")}</button>
+      <p id="preferences-error" class="notice warning" role="alert" tabindex="-1" hidden></p>
       <a class="button secondary" id="preferences-data" href="#data">${text("data.backupLink")}</a></div>`;
+    const reminder = form.elements.namedItem("routineReminders"), save = document.getElementById("save-preferences");
+    const error = document.getElementById("preferences-error"), support = document.getElementById("reminder-support");
+    const scheduleValues = () => ({
+      routineMinutes: Number(form.elements.namedItem("routineMinutes").value),
+      routineTime: form.elements.namedItem("routineTime").value,
+      routineDays: [...form.querySelectorAll('[name="routineDays"]:checked')].map(input => Number(input.value)),
+      routineReminders: reminder.checked
+    });
+    const showError = key => { error.hidden = false; error.textContent = C.t(key); error.focus(); };
+    const updateReminders = () => {
+      const state = C.Reminders.status(), schedule = scheduleValues();
+      const available = Boolean(schedule.routineTime && schedule.routineDays.length);
+      reminder.disabled = permissionPending || (!reminder.checked && (!available || !["default", "granted"].includes(state)));
+      support.textContent = C.t(permissionPending ? "reminders.pending" : `reminders.${state}`);
+      save.disabled = permissionPending;
+      document.getElementById("export-calendar").disabled = !available;
+      document.getElementById("calendar-schedule-error").hidden = available;
+    };
+    form.oninput = event => {
+      const time = form.elements.namedItem("routineTime");
+      // Safari can retain an invalid editor state after an optional time is cleared.
+      if (event.target === time && time.value === "" && !time.validity.badInput) time.value = "";
+      error.hidden = true; updateReminders();
+      if (["theme", "colorTheme"].includes(event.target.name)) {
+        appearancePreview = Object.fromEntries(["theme", "colorTheme"].map(key => [key, form.elements.namedItem(key).value]));
+        applyTheme();
+      }
+    };
+    reminder.onchange = async () => {
+      if (!reminder.checked) { updateReminders(); return; }
+      const validation = C.practiceScheduleError(scheduleValues());
+      if (validation) { reminder.checked = false; updateReminders(); showError(validation); return; }
+      permissionPending = true; updateReminders();
+      try {
+        const allowed = await C.Reminders.requestPermission();
+        if (!reminder.isConnected) return;
+        reminder.checked = allowed;
+        if (!allowed) showError("reminders.notGranted");
+      } catch (failure) {
+        console.warn("Notification permission could not be enabled:", failure);
+        if (!reminder.isConnected) return;
+        reminder.checked = false;
+        showError(/^reminders\./.test(failure.message) ? failure.message : "reminders.failure");
+      } finally {
+        permissionPending = false;
+        if (reminder.isConnected) updateReminders();
+      }
+    };
+    document.getElementById("export-calendar").onclick = () => {
+      try { C.download("bbg-practice-reminders.ics", C.Routine.calendar(scheduleValues()), "text/calendar;charset=utf-8"); }
+      catch (failure) { console.warn("Calendar export failed:", failure); showError(
+        /^preferences\./.test(failure.message) ? failure.message : "preferences.calendarFailure"); }
+    };
+    document.getElementById("cancel-preferences").onclick = () => dialog.close();
+    document.getElementById("preferences-share").onclick = openShare;
     document.getElementById("preferences-data").onclick = () => { dialogOpeners.delete(dialog); dialog.close(); };
     document.getElementById("install-app")?.addEventListener("click", async () => {
-      try { await C.PWA.install(); } catch (error) { console.warn("Install prompt failed:", error); C.notice("pwa.failed"); }
+      try { await C.PWA.install(); } catch (failure) { console.warn("Install prompt failed:", failure); showError("pwa.failed"); }
     });
     form.onsubmit = event => {
       event.preventDefault();
-      const next = Object.fromEntries(["language", "theme", "warmupPolicy", "inputMethod"].map(key => [key, form.elements.namedItem(key).value]));
-      next.routineMinutes = Number(form.elements.namedItem("routineMinutes").value);
+      if (permissionPending || C.Reminders.pending) { showError("reminders.pending"); return; }
+      if (!form.reportValidity()) return;
+      const next = { ...scheduleValues(), ...Object.fromEntries(["language", "theme", "colorTheme", "warmupPolicy", "inputMethod"]
+        .map(key => [key, form.elements.namedItem(key).value])) };
+      const validation = C.appearanceError(next) || C.practiceScheduleError(next);
+      if (validation) { showError(validation); return; }
+      if (next.routineReminders && C.Reminders.status() !== "granted") { showError("reminders.permissionRequired"); return; }
       next.fullscreen = form.elements.namedItem("fullscreen").checked; next.vibration = form.elements.namedItem("vibration").checked;
-      C.language = next.language;
       const saved = C.Storage.setSettings(next);
       syncPreferences(); dialog.close(); render(); C.notice(saved ? "settings.saved" : "data.pending");
+      void C.Reminders.refresh();
     };
+    updateReminders();
     showDialog(dialog, event?.currentTarget || document.getElementById("open-settings"));
+  }
+  const shareData = () => ({ title: C.t("app.title"), text: C.t("share.message"),
+    url: new URL("./#home", location.href).href });
+  function openShare(event) {
+    if (C.active || C.starting) { C.notice("share.busy"); return; }
+    const dialog = document.getElementById("share-dialog"), link = document.getElementById("share-link");
+    const status = document.getElementById("share-status"), native = document.getElementById("native-share");
+    const data = shareData(), address = new URL(data.url);
+    link.value = data.url; status.textContent = ""; native.disabled = false;
+    document.getElementById("share-local-warning").hidden = !(
+      address.hostname === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(address.hostname) ||
+      /(^|\.)localhost$/.test(address.hostname) || !["https:", "http:"].includes(address.protocol));
+    native.hidden = !window.isSecureContext || typeof navigator.share !== "function";
+    if (!native.hidden && typeof navigator.canShare === "function") {
+      try { native.hidden = !navigator.canShare(data); }
+      catch (error) { console.warn("Device sharing is unavailable:", error); native.hidden = true; status.textContent = C.t("share.unavailable"); }
+    }
+    const social = [["Facebook", "https://www.facebook.com/sharer/sharer.php", { u: data.url }],
+      ["X", "https://twitter.com/intent/tweet", { text: data.text, url: data.url }],
+      ["WhatsApp", "https://wa.me/", { text: `${data.text} ${data.url}` }]];
+    document.getElementById("social-share-links").innerHTML = social.map(([name, base, params]) => {
+      const url = new URL(base); url.search = new URLSearchParams(params).toString();
+      return `<a class="button secondary" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${esc(name)}</a>`;
+    }).join("");
+    document.getElementById("copy-share-link").onclick = async () => {
+      try {
+        if (typeof navigator.clipboard?.writeText !== "function") throw new Error("Clipboard API is unavailable");
+        await navigator.clipboard.writeText(data.url);
+        status.textContent = C.t("share.copied");
+      } catch (error) {
+        console.warn("App link could not be copied automatically:", error);
+        link.focus(); link.select(); status.textContent = C.t("share.manualCopy");
+      }
+    };
+    native.onclick = async () => {
+      native.disabled = true; status.textContent = "";
+      try { await navigator.share(data); }
+      catch (error) {
+        if (error.name !== "AbortError") { console.warn("Device sharing failed:", error); status.textContent = C.t("share.unavailable"); }
+      } finally { native.disabled = false; }
+    };
+    showDialog(dialog, event?.currentTarget || document.getElementById("share-app"));
   }
   function closeSettings() {
     const form = document.getElementById("settings-form");
@@ -918,8 +1072,13 @@
     document.getElementById("open-settings").onclick = openPreferences;
     document.getElementById("close-preferences").onclick = () => document.getElementById("preferences-dialog").close();
     document.getElementById("close-settings").onclick = closeSettings;
-    document.getElementById("preferences-dialog").addEventListener("close", restoreDialogFocus);
+    document.getElementById("preferences-dialog").addEventListener("close", event => {
+      appearancePreview = null; applyTheme(); restoreDialogFocus(event);
+    });
     document.getElementById("settings-dialog").addEventListener("close", restoreDialogFocus);
+    document.getElementById("share-app").onclick = openShare;
+    document.getElementById("close-share").onclick = () => document.getElementById("share-dialog").close();
+    document.getElementById("share-dialog").addEventListener("close", restoreDialogFocus);
     document.getElementById("settings-dialog").addEventListener("cancel", event => { if (!closeSettings()) event.preventDefault(); });
     document.getElementById("abort").onclick = () => C.active?.abort();
     document.getElementById("abort").onpointerdown = event => { event.preventDefault(); C.active?.abort(); };
@@ -953,11 +1112,12 @@
       else render(true);
     });
     matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
-      if (!C.active && settings().theme === "system") applyTheme();
+      if (!C.active && !C.starting && (appearancePreview || settings()).theme === "system") applyTheme();
     });
     render();
     C.Timing.ready = C.Timing.measure();
+    C.Reminders.init();
   }
   C.UI = { init, render, home, library, instructions, routineView, results, startPractice, runMain, finish, cooldown,
-    chart, researchCard, openSettings, openPreferences, updateRunner, applyTheme, syncPreferences };
+    chart, researchCard, openSettings, openPreferences, openShare, shareData, updateRunner, applyTheme, syncPreferences };
 })();

@@ -23,19 +23,21 @@ For a phone on the same trusted Wi-Fi network:
 npm run dev -- --host 0.0.0.0 --port 4173
 ```
 
-Open `http://<your-computer-LAN-address>:4173` on the phone. Allow local-network access through the computer's firewall if necessary. LAN HTTP supports ordinary practice, but service workers, offline installation and screen wake locks require **HTTPS or localhost**. A phone's `localhost` is the phone, not the computer.
+Open `http://<your-computer-LAN-address>:4173` on the phone. Allow local-network access through the computer's firewall if necessary. LAN HTTP supports ordinary practice, but service workers, offline installation, browser notifications, native device sharing and screen wake locks require **HTTPS or localhost**. Link copying and social-share links remain available without native sharing. A phone's `localhost` is the phone, not the computer.
 
 For everyday use, publish `index.html`, `app.js`, `i18n.js`, `styles.css`, `js/`, `icons/`, `manifest.webmanifest` and `sw.js` together on a static HTTPS host. Keep their relative paths and serve `sw.js` without long-lived HTTP caching. Do not publish development dependencies or test artifacts.
 
 Browser data belongs to an **origin**: protocol, hostname and port. Changing from a LAN address to HTTPS, using another browser, or installing in a separate storage context may start with empty data. Export JSON before changing where you use the app; there is no automatic device sync. Opening the HTML directly as a file is not the supported offline-installation path.
 
-## Morning practice
+## Your practice schedule
 
-**Today** offers a date-based plan rather than requiring you to choose exercises each morning. The default is a 10-minute template with focus, memory and reasoning rounds. The 15-minute template adds PVT-B; the 20-minute template also adds paired associates.
+**Today** offers a date-based plan rather than requiring you to choose every exercise yourself. In **Settings**, choose a 10/15/20-minute budget, preferred weekdays and an optional local start time. The default remains every day at 08:00 with a 10-minute template of focus, memory and reasoning rounds. The 15-minute template adds PVT-B; the 20-minute template also adds paired associates.
+
+Practice labels follow your preferred time: morning, afternoon, evening or night. Leave the time blank for flexible starts, or clear all days for an unscheduled plan. The home screen shows selected/rest days and the next preferred start, but never prevents off-day practice. Preferences belong to this browser's local profile, not an account; times follow the device's local timezone.
 
 These are estimated budgets, **not countdown cutoffs**. Warm-ups, pauses and slower answers can add time. A round keeps its full protocol instead of being cut short to meet a budget. Completed and skipped steps persist, so you can return between rounds later that day. An interrupted measured round must be retried, not resumed halfway through.
 
-Routine profiles do not overwrite your saved exercise parameters. Time-budget changes apply to the next routine; an already-started plan stays stable for the current local calendar day. Use **Exercises** for individual practice, search, categories and favorites.
+Routine profiles do not overwrite your saved exercise parameters. Time-budget changes apply to the next new routine; an already-started plan stays stable for the current local calendar day. Use **Exercises** for individual practice, search, categories and favorites.
 
 New training setups include eight actual warm-up presentations. Successful warm-up practice makes the same setup eligible for an optional warm-up next time; you can always choose to repeat it. Familiarity depends on parameters, device class, input method, relevant language and protocol. N-back also requires a target-match response for every enabled stream, not just correctly withholding responses.
 
@@ -44,6 +46,20 @@ New training setups include eight actual warm-up presentations. Successful warm-
 Arithmetic keeps its starting/fixed maximum separate from the configurable training ceiling (default 1,000), preserving upward adaptation without exceeding that ceiling. Every displayed calculation operand, including a division's dividend and chained additions, respects the configured minimum and current maximum. Percentage rates and calculated results need not fall within the operand bounds. Division uses nonzero divisors and exact integer results. Existing saved arithmetic settings and daily plans adopt the default ceiling.
 
 Stroop warm-ups cover WORD and INK when both rules are enabled, still using eight presentations in total. Stroop, Flanker and Simon main blocks always run for the full 90 seconds, even when rapid input is excluded from scoring. PVT-B retains genuine slow lapses in its lapse count and reaction-time metrics; a missed stop-cue display cannot update the stop-signal staircase. Corrected arithmetic, vigilance and conflict rounds use protocol version 3, keeping their scores, adaptive state and warm-up familiarity separate from earlier implementations; other exercises retain protocol version 2. Historical records remain available.
+
+### Optional reminders
+
+Open **Settings > Practice reminders** to enable browser reminders explicitly. Permission is requested only when you turn the option on, and opting in is saved only with **Save settings**. They require notification permission and an active service worker. On supported iPhone/iPad versions, browser notification support is available to installed Home Screen apps; use calendar reminders if the browser cannot enable it.
+
+**Browser reminders are best-effort while BBG is open, not scheduled push notifications when it is closed.** The app checks approximately every 30 seconds and on focus/visibility changes, within 30 minutes after your preferred start on selected days, at most once per local date. Suspended/background tabs may not run the check. It skips running/starting rounds, pending saved work, days with completed practice and already-started daily plans. Clicking a reminder focuses an existing app tab without navigating or losing a round/draft; otherwise it opens Today. No push subscription, server or background wakeup service is introduced.
+
+For reminders **when BBG is closed**, export a weekly `.ics` calendar file from the same settings section and import it into your calendar app. The export uses the currently selected form values, local/floating start times, chosen weekdays, estimated duration and an at-start alarm. Delivery and timezone/daylight-saving rules depend on that calendar app. Imported events cannot observe completed practice or later BBG settings changes: replace the old calendar event when changing your schedule, rather than importing duplicate events.
+
+### Sharing BBG
+
+**Share BBG** is available in the footer and Settings. The dialog offers native device sharing when supported, link copying (with a selected-link manual fallback), and Facebook/X/WhatsApp links. It shares only the public app link and a short app description, never scores, forecasts, preferences or backups. Query parameters and private route identifiers are removed; deployment subpaths are retained.
+
+No social SDKs or tracking are loaded, and no social-network request occurs until you choose a network. Sharing a localhost development address will not make it reachable on someone else's device; the dialog warns about that. Use the published app address for public sharing.
 
 ## Mobile, installation and offline use
 
@@ -59,7 +75,9 @@ Audio n-back uses **local speech voices only**, with distinct letter-name and wo
 
 ## Visual design and color evidence
 
-BBG uses forest green and lime as its visual identity, with cobalt (memory), ochre (attention), green (reasoning), copper (learning) and slate (forecasting). Category colors always accompany written labels and distinct icons. Light and dark themes use semantic `--cp-*` tokens, contrast-tested text, visible focus indicators and reduced-motion support. The decorative orbital illustration is static and never appears in a timed round. Exercise backgrounds and stimulus colors remain independent of the interface theme.
+Open **Settings > Appearance** to independently choose **Light**, **Dark** or **Follow device**, and a **Rose**, **Graphite** or **Amber** color theme. The default is Rose with device-following brightness. All combinations use clean, neutral backgrounds rather than green-tinted surfaces; Graphite is the minimal monochrome interface, including category labels and illustrations. Selections preview immediately, but are only saved with **Save settings**. Close, Cancel or Escape restores the saved appearance without saving other draft preferences. Appearance is stored in the same local profile and JSON backups; older backups acquire the default accent without losing history or their existing light/dark choice.
+
+Themes use semantic `--cp-*` tokens, contrast-tested text, visible focus indicators and reduced-motion support. In colored themes, restrained category colors always accompany written labels and distinct icons; Graphite retains those labels/icons without relying on color. Progress charts pair each of their four series styles with a matching line pattern and point shape in the legend, so color is not the only way to distinguish series. The decorative orbital illustration is static and never appears in a timed round. Exercise backgrounds, response highlights and stimulus colors remain independent of the interface theme, so color-sensitive exercises keep their protocols.
 
 This is an evidence-informed usability decision, **not a claim that a palette improves cognition**. Color-psychology findings depend on task, difficulty, context and individual differences; effects of blue-enriched illumination are not evidence that a blue button improves performance. The palette prioritizes readable contrast, predictable navigation and restrained decoration over physiological or clinical promises.
 
@@ -83,7 +101,7 @@ Examples: [Kessels et al. (2000)](https://doi.org/10.1207/S15324826AN0704_8) pub
 
 A future external comparison would need an appropriately licensed reference, defined population/sample size, exact protocol and scoring match, device/input timing validation, relevant demographic groups, uncertainty and a documented tie convention. A voluntary app cohort would support “among participating users,” **not “worldwide.”** Repeated rounds must not be counted as independent people. A shared cohort would also require an explicit opt-in collection service and a reviewed privacy design; no such service or upload is introduced here. No age or birth date is collected without a valid age-based reference. Age alone cannot repair protocol or sampling differences. Forecasting comparisons additionally require comparable event difficulty and horizons.
 
-A fully completed training round with only display-timing warnings still counts toward morning practice and weekly activity. Its score remains excluded from comparison charts, its adaptive state is not saved, and it cannot start an assessment cooldown. Other invalid/interrupted attempts do not advance the routine. Timing advisories are compact during practice; complete reasons remain available in the saved round.
+A fully completed training round with only display-timing warnings still counts toward your practice routine and weekly activity. Its score remains excluded from comparison charts, its adaptive state is not saved, and it cannot start an assessment cooldown. Other invalid/interrupted attempts do not advance the routine. Timing advisories are compact during practice; complete reasons remain available in the saved round.
 
 Browser timing is not calibrated physical-device latency. The interface has semantic controls, keyboard focus management, contrast coverage and reduced-motion support, but canvas stimuli are **not equivalent nonvisual exercises**. This is not a claim of full WCAG conformance. Local speech, real touch/display latency, notches/safe areas and installed-home-screen behavior still need checking on the actual devices you use.
 
@@ -118,10 +136,11 @@ The app uses deferred classic scripts and attaches shared APIs to `window.Cortex
 | `js/generators.js` | Reasoning generators and reusable item models |
 | `js/runner.js` | Drawing, local speech, timing, native response controls and runner lifecycle |
 | `js/tasks/` | Six domain modules containing the exercise engines and spatial models |
-| `js/routine.js` | Local-day plans, profiles, completion and warm-up familiarity |
+| `js/routine.js` | Local-day plans, preferred days/times, calendar exports, completion and warm-up familiarity |
+| `js/reminders.js` | Explicit browser notification permission, guarded app-open reminders and delivery deduplication |
 | `js/forecasting.js` | Drafts, immutable journal actions, pagination and calibration |
 | `js/progress.js` | Shared comparison keys, descriptive personal windows and exercise research references |
-| `js/ui.js` | Navigation, settings, instructions, progress, results and data journeys |
+| `js/ui.js` | Navigation, personalized settings, safe app sharing, instructions, progress, results and data journeys |
 | `js/pwa.js`, `sw.js` | Installation, safe updates and scoped offline shell caching |
 | `i18n.js`, `styles.css` | Synchronized English/German copy and responsive theme |
 | `app.js` | DOM-ready entrypoint |
@@ -139,8 +158,8 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-The syntax check follows browser scripts from `index.html`. Unit/engine tests cover all timed tasks through warm-up and training/assessment paths, deliberately wrong answers and omissions, input and lifecycle regressions, task models, exact timed-block duration, arithmetic operand bounds, vigilance lapse retention, score guards, storage compatibility and every daily-budget rotation.
+The syntax check follows browser scripts from `index.html`. Unit/engine tests cover all timed tasks through warm-up and training/assessment paths, deliberately wrong answers and omissions, input and lifecycle regressions, task models, exact timed-block duration, arithmetic operand bounds, vigilance lapse retention, score guards, storage compatibility and every daily-budget rotation. Scheduling coverage includes timezone/DST boundaries, old preferences, strict validation, UTF-8-folded calendar exports, exact reminder windows, permission/readiness races and non-destructive notification clicks.
 
-Playwright covers desktop Chromium, an Android-profile Chromium browser and an iPhone-profile WebKit browser. Every timed exercise completes its eight warm-ups and a full main round through native keyboard/touch handlers, including persisted results; mouse controls, all n-back variants, both speech sets and arithmetic-ceiling settings have dedicated coverage. These journeys use supported exercise settings, not shortened engine protocols. Other journeys include a complete morning routine, interruptions/resume, all exercise pages in both languages/themes, portrait/landscape scenes, tablet dialogs, journal conflicts, backups, quota/corrupt recovery, contrast, offline navigation and safe worker updates. Browser clocks accelerate durations without shortening production protocols. Speech tests use explicit local-voice mocks, verify the spoken stimuli within each warm-up, and verify that remote-only voices are blocked; actual pronunciation and device speech timing still need physical-device checks.
+Playwright covers desktop Chromium, an Android-profile Chromium browser and an iPhone-profile WebKit browser. Every timed exercise completes its eight warm-ups and a full main round through native keyboard/touch handlers, including persisted results; mouse controls, all n-back variants, both speech sets and arithmetic-ceiling settings have dedicated coverage. These journeys use supported exercise settings, not shortened engine protocols. Other journeys include a complete practice routine, interruptions/resume, personalized schedules, calendar downloads, sharing/privacy/focus and fallback behavior, all exercise pages in both languages/themes, appearance preview/cancel/persistence and device-following brightness, portrait/landscape scenes, tablet dialogs, journal conflicts, backups, quota/corrupt recovery, contrast across all six color/brightness combinations, offline navigation and safe worker updates. Browser clocks accelerate durations without shortening production protocols. Notification and sharing APIs are mocked to verify gestures, permission denials, delivery calls and errors without OS prompts or external sharing. Speech tests use explicit local-voice mocks, verify the spoken stimuli within each warm-up, and verify that remote-only voices are blocked; actual OS notification delivery, native share sheets, pronunciation and device speech timing still need physical-device checks.
 
 Chromium's offline test uses browser offline mode. WebKit's test stops an isolated test-owned origin and confirms service-worker navigation instead, because Playwright WebKit's offline emulation rejects worker responses ([microsoft/playwright#42775](https://github.com/microsoft/playwright/issues/42775)). Emulated coverage does not replace the physical-device checks described above.

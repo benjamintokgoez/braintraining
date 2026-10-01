@@ -13,8 +13,7 @@ window.Cortex = {};
   C.layoutOrientation = viewport => Number.isFinite(viewport?.width) && Number.isFinite(viewport?.height) ?
     viewport.width > viewport.height ? "landscape" : "portrait" : "unknown";
   C.iso = () => new Date(performance.timeOrigin + C.now()).toISOString();
-  C.today = () => {
-    const date = new Date(performance.timeOrigin + C.now());
+  C.today = (date = new Date(performance.timeOrigin + C.now())) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   };
   C.validDate = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
@@ -57,11 +56,30 @@ window.Cortex = {};
     if (typeof value !== "number" && /^\s*[=+\-@]|^[\t\r\n]/.test(text)) text = "'" + text;
     return `"${text.replace(/"/g, '""')}"`;
   };
+  C.appearanceError = value => !validObject(value) ||
+    value.theme !== undefined && !["system", "light", "dark"].includes(value.theme) ||
+    value.colorTheme !== undefined && !["rose", "graphite", "amber"].includes(value.colorTheme) ?
+    "preferences.appearanceInvalid" : null;
+  C.practiceScheduleError = value => {
+    if (!validObject(value)) return "preferences.scheduleInvalid";
+    const days = value.routineDays, time = value.routineTime;
+    if (days !== undefined && (!Array.isArray(days) || days.length > 7 || new Set(days).size !== days.length ||
+      days.some(day => !Number.isInteger(day) || day < 0 || day > 6)) ||
+      time !== undefined && (typeof time !== "string" || time !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) ||
+      value.routineMinutes !== undefined && ![10, 15, 20].includes(value.routineMinutes) ||
+      value.routineReminders !== undefined && typeof value.routineReminders !== "boolean" ||
+      value.reminderLastDate !== undefined && value.reminderLastDate !== null && !C.validDate(value.reminderLastDate)) {
+      return "preferences.scheduleInvalid";
+    }
+    return value.routineReminders === true && (time === "" || days?.length === 0) ?
+      "preferences.reminderScheduleRequired" : null;
+  };
 
   const empty = () => ({
     schemaVersion: 1,
     settings: { language: navigator.language.toLowerCase().startsWith("de") ? "de" : "en",
-      mode: "training", vibration: false, fullscreen: false, theme: "system", routineMinutes: 10,
+      mode: "training", vibration: false, fullscreen: false, theme: "system", colorTheme: "rose", routineMinutes: 10,
+      routineTime: "08:00", routineDays: [1, 2, 3, 4, 5, 6, 0], routineReminders: false, reminderLastDate: null,
       warmupPolicy: "familiar", inputMethod: "auto", favorites: [], practiceReady: {}, taskParams: {}, staircases: {}, notices: {} },
     sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null
   });
@@ -134,8 +152,8 @@ window.Cortex = {};
       preferences.mode !== undefined && !["training", "assessment"].includes(preferences.mode) ||
       preferences.vibration !== undefined && typeof preferences.vibration !== "boolean" ||
       preferences.fullscreen !== undefined && typeof preferences.fullscreen !== "boolean" ||
-      preferences.theme !== undefined && !["system", "light", "dark"].includes(preferences.theme) ||
-      preferences.routineMinutes !== undefined && ![10, 15, 20].includes(preferences.routineMinutes) ||
+      C.appearanceError(preferences) ||
+      C.practiceScheduleError(preferences) ||
       preferences.warmupPolicy !== undefined && !["familiar", "always"].includes(preferences.warmupPolicy) ||
       preferences.inputMethod !== undefined && !["auto", "keyboard", "touch", "mouse"].includes(preferences.inputMethod) ||
       preferences.favorites !== undefined && (!Array.isArray(preferences.favorites) ||
@@ -228,7 +246,14 @@ window.Cortex = {};
       C.download(`bbg-recovery-${C.iso().slice(0, 10)}.json`, unreadableOriginal, "application/json");
     },
     getSettings: () => C.clone(root.settings),
-    setSettings(settings) { root.settings = { ...root.settings, ...sanitize(C.clone(settings)) }; return persist(); },
+    setSettings(settings) {
+      if (!validObject(settings)) throw new Error("preferences.scheduleInvalid");
+      const next = { ...root.settings, ...sanitize(C.clone(settings)) };
+      const error = C.appearanceError(next) || C.practiceScheduleError(next);
+      if (error) throw new Error(error);
+      root.settings = next;
+      return persist();
+    },
     appendSession(summary, rows, options = {}) {
       if (root.sessions.some(s => s.id === summary.id)) throw new Error("data.duplicate");
       root.sessions.push(C.clone(summary));

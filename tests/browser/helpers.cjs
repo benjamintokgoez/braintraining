@@ -12,6 +12,44 @@ async function noOverflow(page) {
   expect(sizes.content, "The page must fit its viewport").toBeLessThanOrEqual(sizes.width + 1);
 }
 
+async function contrastFailures(page) {
+  return page.evaluate(() => {
+    const parse = value => {
+      const parts = value.match(/[\d.]+/g)?.map(Number);
+      return parts?.length >= 3 ? [...parts.slice(0, 3), parts[3] ?? 1] : null;
+    };
+    const mix = (foreground, background) => foreground.slice(0, 3).map((value, index) =>
+      value * foreground[3] + background[index] * (1 - foreground[3]));
+    const luminance = rgb => rgb.map(value => value / 255).map(value =>
+      value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+      .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), failures = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      const element = node.parentElement;
+      if (!node.textContent.trim() || !element || element.closest("script, style, .visually-hidden, [aria-hidden='true'], :disabled")) continue;
+      const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2 || style.visibility !== "visible") continue;
+      const foreground = parse(element instanceof SVGElement ? style.fill : style.color);
+      if (!foreground) continue;
+      const layers = [];
+      for (let parent = element; parent; parent = parent.parentElement) {
+        const color = parse(getComputedStyle(parent).backgroundColor);
+        if (color?.[3]) layers.unshift(color);
+      }
+      let background = [255, 255, 255];
+      for (const layer of layers) background = mix(layer, background);
+      const a = luminance(mix(foreground, background)), b = luminance(background);
+      const ratio = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+      const size = parseFloat(style.fontSize), large = size >= 24 || size >= 18.66 && Number(style.fontWeight) >= 700;
+      if (ratio + .015 < (large ? 3 : 4.5)) failures.push({
+        text: node.textContent.trim().slice(0, 80), ratio: Number(ratio.toFixed(2)), tag: element.tagName, className: element.getAttribute("class")
+      });
+    }
+    return failures;
+  });
+}
+
 async function seedSessions(page, count = 45) {
   await page.evaluate(async count => {
     const C = window.Cortex, task = C.Tasks.find(task => task.id === "flanker-squared");
@@ -111,4 +149,4 @@ async function playPhase(page, phase) {
   throw new Error(`Browser response budget exceeded in ${phase}`);
 }
 
-module.exports = { open, noOverflow, seedSessions, capture, enableClock, playPhase };
+module.exports = { open, noOverflow, contrastFailures, seedSessions, capture, enableClock, playPhase };

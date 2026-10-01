@@ -72,7 +72,8 @@ function fixture(options = {}) {
   });
   Object.assign(env, {
     console: { log() {}, info() {}, warn: (...args) => warnings.push(args), error: (...args) => errors.push(args) },
-    Intl, DOMException, AbortController, Event, EventTarget, URL, URLSearchParams, Blob, Math: randomMath, crypto: globalThis.crypto,
+    Intl, DOMException, AbortController, Event, EventTarget, URL, URLSearchParams, Blob, TextEncoder,
+    Math: randomMath, crypto: globalThis.crypto,
     navigator: { language: options.language || "en", maxTouchPoints: options.touch ? 5 : 0 },
     performance: { timeOrigin: options.epoch || Date.UTC(2026, 0, 1), now: () => time },
     innerWidth: width, innerHeight: height, devicePixelRatio: options.dpr || 1,
@@ -99,6 +100,8 @@ function fixture(options = {}) {
     SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
     setTimeout(fn, ms) { const token = {}; timers.set(token, { fn, ms }); return token; },
     clearTimeout(token) { timers.delete(token); },
+    setInterval(fn, ms) { const token = {}; timers.set(token, { fn, ms, interval: true }); return token; },
+    clearInterval(token) { timers.delete(token); },
     requestAnimationFrame(fn) {
       return setImmediate(() => { time += 16; env.onFrame?.(time); fn(time); });
     }
@@ -126,7 +129,10 @@ function fixture(options = {}) {
   }
   return { C, env, document, events, speech, spoken, draws, timers, storage, nodes, task, runner, panel, key, warnings, errors,
     get writes() { return writes; },
-    expire(ms) { for (const [token, timer] of [...timers]) if (timer.ms === ms) { timers.delete(token); timer.fn(); } },
+    expire(ms) { for (const [token, timer] of [...timers]) if (timer.ms === ms) {
+      if (!timer.interval) timers.delete(token);
+      timer.fn();
+    } },
     setTime(value) { time = value; }
   };
 }

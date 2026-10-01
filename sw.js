@@ -1,11 +1,11 @@
 "use strict";
 
 const CACHE_PREFIX = `cortex-shell-${self.registration.scope}-`;
-const CACHE = `${CACHE_PREFIX}v8`;
+const CACHE = `${CACHE_PREFIX}v10`;
 const ASSETS = [
   "./", "index.html", "styles.css", "i18n.js", "app.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png",
-  "js/core.js", "js/generators.js", "js/runner.js", "js/routine.js", "js/pwa.js", "js/ui.js", "js/progress.js",
+  "js/core.js", "js/generators.js", "js/runner.js", "js/routine.js", "js/pwa.js", "js/reminders.js", "js/ui.js", "js/progress.js",
   "js/forecasting.js", "js/tasks/span-and-speed.js", "js/tasks/focus.js", "js/tasks/reasoning.js",
   "js/tasks/learning.js", "js/tasks/inhibition.js", "js/tasks/spatial.js"
 ];
@@ -22,6 +22,21 @@ self.addEventListener("activate", event => {
 });
 self.addEventListener("message", event => {
   if (event.data === "SKIP_WAITING") void self.skipWaiting();
+});
+self.addEventListener("notificationclick", event => {
+  if (!event.notification.tag.startsWith("bbg-practice-")) return;
+  event.notification.close();
+  event.waitUntil((async () => {
+    const destination = new URL("./#home", self.registration.scope);
+    const entryPaths = new Set([destination.pathname, new URL("index.html", destination).pathname]);
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const existing = windows.find(client => {
+      const address = new URL(client.url);
+      return address.origin === destination.origin && entryPaths.has(address.pathname);
+    });
+    if (existing) { await existing.focus(); return; }
+    await self.clients.openWindow(destination.href);
+  })());
 });
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return;

@@ -6,20 +6,22 @@
     <script>
       (() => {
         let preference = new URLSearchParams(window.location.search).get("scoutTheme");
-        if (preference !== "light" && preference !== "dark") {
-          try {
-            preference = JSON.parse(localStorage.getItem("cortex.v1"))?.settings?.theme || "system";
-          } catch (error) {
-            console.warn("Theme preference could not be read:", error.name);
-          }
+        let colorTheme = "rose";
+        try {
+          const settings = JSON.parse(localStorage.getItem("cortex.v1"))?.settings;
+          if (preference !== "light" && preference !== "dark") preference = settings?.theme;
+          if (["rose", "graphite", "amber"].includes(settings?.colorTheme)) colorTheme = settings.colorTheme;
+        } catch (error) {
+          console.warn("Theme preference could not be read:", error.name);
         }
         document.documentElement.setAttribute("data-theme", preference === "light" || preference === "dark" ?
           preference : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-color-theme", colorTheme);
       })();
     </script>
     <title data-i18n="app.title">BBG</title>
     <meta name="description" content="BBG - Benny's Brain Gym: challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.">
-    <meta name="theme-color" content="#f3f5ef">
+    <meta name="theme-color" content="#f7f4ef">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="BBG">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -40,6 +42,7 @@
     <script src="js/forecasting.js" defer></script>
     <script src="js/progress.js" defer></script>
     <script src="js/pwa.js" defer></script>
+    <script src="js/reminders.js" defer></script>
     <script src="js/ui.js" defer></script>
     <script src="app.js" defer></script>
   </head>
@@ -100,12 +103,29 @@
       <form id="settings-form" class="stack"></form>
     </dialog>
 
+    <dialog id="share-dialog" aria-labelledby="share-heading">
+      <div class="section-heading">
+        <h2 id="share-heading" data-i18n="share.title">Share BBG</h2>
+        <button id="close-share" type="button" class="secondary" data-i18n="common.close">Close</button>
+      </div>
+      <p data-i18n="share.privacy"></p>
+      <label class="field"><span data-i18n="share.link"></span><input id="share-link" type="text" inputmode="url" readonly></label>
+      <div class="actions">
+        <button id="copy-share-link" class="secondary" type="button" data-i18n="share.copy">Copy link</button>
+        <button id="native-share" class="primary" type="button" data-i18n="share.native" hidden></button>
+      </div>
+      <div class="actions" id="social-share-links"></div>
+      <p id="share-status" role="status" aria-live="polite"></p>
+      <p id="share-local-warning" class="notice warning" data-i18n="share.localWarning" hidden></p>
+    </dialog>
+
     <footer class="shell">
       <div class="inline"><span class="local-indicator" aria-hidden="true"></span><span data-i18n="app.localOnly"></span></div>
       <nav class="footer-nav" data-i18n-aria="nav.more">
         <a href="#data" data-i18n="nav.data"></a>
         <a href="#reliability" data-i18n="nav.reliability"></a>
         <a href="#about" data-i18n="nav.about"></a>
+        <button id="share-app" class="secondary" type="button" data-i18n="share.open">Share BBG</button>
         <button id="app-update" class="secondary" type="button" hidden data-i18n="pwa.update"></button>
       </nav>
     </footer>

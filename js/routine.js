@@ -2,6 +2,39 @@
 
 (() => {
   const C = window.Cortex;
+  const weekdays = Object.freeze([1, 2, 3, 4, 5, 6, 0]);
+  const schedule = (preferences = C.Storage.getSettings(), now = new Date(C.iso())) => {
+    const error = C.practiceScheduleError(preferences);
+    if (error) throw new Error(error);
+    if (!Number.isFinite(now.getTime())) throw new RangeError("Practice schedule needs a valid local date");
+    const days = preferences.routineDays ?? [...weekdays], time = preferences.routineTime ?? "08:00";
+    const hour = time ? Number(time.slice(0, 2)) : null, minute = time ? Number(time.slice(3)) : null;
+    const period = hour === null || !days.length ? "flexible" : hour < 5 || hour >= 21 ? "night" :
+      hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+    let next = null;
+    if (time && days.length) {
+      for (let offset = 0; offset <= 7; offset++) {
+        const candidate = new Date(now);
+        candidate.setDate(now.getDate() + offset);
+        candidate.setHours(hour, minute, 0, 0);
+        if (days.includes(candidate.getDay()) && candidate >= now) { next = candidate; break; }
+      }
+    }
+    return { days, time, hour, minute, titleKey: `routine.title.${period}`, date: C.today(now),
+      scheduledToday: days.includes(now.getDay()), next };
+  };
+  const calendarText = value => String(value).replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n")
+    .replace(/;/g, "\\;").replace(/,/g, "\\,");
+  const foldCalendarLine = line => {
+    const encoder = new TextEncoder();
+    let folded = "", size = 0;
+    for (const character of line) {
+      const bytes = encoder.encode(character).length;
+      if (size + bytes > 75) { folded += "\r\n "; size = 1; }
+      folded += character; size += bytes;
+    }
+    return folded;
+  };
   const profiles = {
     "flanker-squared": { blocks: 1 },
     "simon-squared": { blocks: 1 },
@@ -61,7 +94,25 @@
     return { id: C.uid(), date: C.today(), createdAt: C.iso(), completedAt: null, minutes, steps };
   };
   C.Routine = {
-    current, build, isDone, practiceKey,
+    current, build, isDone, practiceKey, schedule, weekdays,
+    titleKey: () => schedule().titleKey,
+    calendar(preferences = C.Storage.getSettings(), now = new Date(C.iso())) {
+      const planned = schedule(preferences, now);
+      if (!planned.next) throw new Error("preferences.reminderScheduleRequired");
+      const dayCodes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"];
+      const start = `${C.today(planned.next).replace(/-/g, "")}T${planned.time.replace(":", "")}00`;
+      const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+      return [
+        "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//BBG//Practice Schedule//EN", "CALSCALE:GREGORIAN",
+        "BEGIN:VEVENT", `UID:${C.uid()}@bbg`, `DTSTAMP:${stamp}`, `DTSTART:${start}`,
+        `DURATION:PT${preferences.routineMinutes ?? 10}M`,
+        `RRULE:FREQ=WEEKLY;BYDAY=${weekdays.filter(day => planned.days.includes(day)).map(day => dayCodes[day]).join(",")};WKST=MO`,
+        `SUMMARY:${calendarText(`${C.t("app.title")} - ${C.t(planned.titleKey)}`)}`,
+        `DESCRIPTION:${calendarText(C.t("preferences.calendarDescription"))}`,
+        "BEGIN:VALARM", "TRIGGER:PT0M", "ACTION:DISPLAY",
+        `DESCRIPTION:${calendarText(C.t("reminders.body"))}`, "END:VALARM", "END:VEVENT", "END:VCALENDAR", ""
+      ].map(foldCalendarLine).join("\r\n");
+    },
     preview: () => current() || build(C.Storage.getSettings().routineMinutes),
     start() {
       const routine = current() || build(C.Storage.getSettings().routineMinutes);
