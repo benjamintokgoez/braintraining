@@ -93,7 +93,7 @@ test("both keys acknowledge immediately, survive hiding, and cannot duplicate or
   assert.equal(trial.rtMs, 64);
   assert.ok(beforeHide && afterHide && repeated);
   assert.ok(f.draws.some(draw => draw.method === "fillText" && draw.args[0] === "✓ Recorded"));
-  assert.ok(f.draws.some(draw => draw.method === "fillRect" && draw.color === "--cp-accent"));
+  assert.ok(f.draws.some(draw => draw.method === "fillRect" && draw.color === "--cp-task-accent"));
   await ctx.close();
 });
 

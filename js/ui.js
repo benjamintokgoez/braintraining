@@ -29,9 +29,37 @@
     check: '<path d="m5 12 4 4L19 6"/>',
     arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
     star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    memory: '<rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="13" width="7" height="7" rx="2"/><path d="M14 7h4v3M10 17H6v-3"/>',
+    attention: '<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/>',
+    reasoning: '<path d="m12 3 9 5v8l-9 5-9-5V8Zm0 10 9-5M12 13 3 8m9 5v8"/>',
+    learning: '<path d="M12 21V11M12 15C5 15 3 10 3 5c6 0 9 3 9 10Zm0-4c0-5 3-8 9-8 0 5-3 8-9 8Z"/>',
+    calibration: '<path d="M4 18a9 9 0 1 1 16 0M12 13l5-6M5 12h2m10 0h2M12 3v2"/><circle cx="12" cy="13" r="2"/>'
   }[name] || ""}</svg>`;
-  const domainLabel = task => `<span class="task-domain">${text(`domain.${task.domain}`)}</span>`;
+  const category = task => ["processing-speed", "vigilance", "attention"].includes(task.domain) ? "attention" : task.domain;
+  const domainIcon = domain => icon(domain === "working-memory" ? "memory" : domain);
+  const domainLabel = task => `<span class="task-domain">${domainIcon(category(task))}${text(`domain.${task.domain}`)}</span>`;
+  const orbitArt = () => `<svg class="orbit-art" viewBox="0 0 320 320" aria-hidden="true">
+    <circle class="orbit-field" cx="160" cy="160" r="124"/>
+    <circle cx="160" cy="160" r="144" stroke-dasharray="2 8"/>
+    <path d="M16 160h20m248 0h20M160 16v20m0 248v20M38 38h12m-6-6v12m226 232h12m-6-6v12"/>
+    <circle cx="160" cy="160" r="108"/><circle cx="160" cy="160" r="84"/>
+    <g class="orbit-reasoning">
+      <ellipse cx="160" cy="160" rx="52" ry="108"/>
+      <ellipse cx="160" cy="160" rx="24" ry="108"/>
+      <path d="M52 160h216M65 110h190M65 210h190"/>
+    </g>
+    <ellipse class="orbit-memory" cx="160" cy="160" rx="116" ry="48" transform="rotate(-38 160 160)" stroke-width="2"/>
+    <ellipse class="orbit-attention" cx="160" cy="160" rx="116" ry="48" transform="rotate(38 160 160)" stroke-width="2"/>
+    <path d="m82 224 78-64 78 64M82 96l78 64 78-64" stroke-dasharray="3 5"/>
+    <circle class="orbit-node" cx="160" cy="52" r="7"/>
+    <circle class="orbit-node memory" cx="82" cy="224" r="8"/>
+    <circle class="orbit-node memory" cx="238" cy="96" r="6"/>
+    <circle class="orbit-node attention" cx="82" cy="96" r="6"/>
+    <circle class="orbit-node attention" cx="238" cy="224" r="8"/>
+    <circle class="orbit-node" cx="160" cy="160" r="10"/>
+    <circle class="orbit-node" cx="160" cy="268" r="5"/>
+  </svg>`;
   const taskTitle = (task, params) => task.id === "dual-nback" && params ?
     C.t(`nback.name.${params.variant}`) : C.t(task.nameKey);
   const taskParams = task => {
@@ -126,7 +154,7 @@
         ${text(day.done ? "home.practiced" : "home.notPracticed")}">${day.done ? icon("check") : '<span aria-hidden="true"></span>'}</span></li>`).join("")}</ol>`;
   const planHTML = routine => `<ol class="routine-list">${routine.steps.map((step, index) => {
     const task = taskById(step.taskId);
-    return `<li class="${step.sessionId ? "completed" : step.skipped ? "skipped" : ""}">
+    return `<li data-domain="${esc(category(task))}" class="${step.sessionId ? "completed" : step.skipped ? "skipped" : ""}">
       <span class="step-number" aria-hidden="true">${step.sessionId ? icon("check") : index + 1}</span>
       <div><strong>${esc(taskTitle(task, step.params))}</strong><span class="muted">${text(`domain.${task.domain}`)}</span></div>
       <span class="step-meta">${step.sessionId ? text("routine.done") : step.skipped ? text("routine.skipped") :
@@ -136,9 +164,12 @@
     const sessions = C.Storage.getSessions(), activity = weeklyActivity(sessions), routine = C.Routine.preview();
     const saved = C.Routine.current(), done = saved && C.Routine.isDone(saved);
     const completed = routine.steps.filter(step => step.sessionId).length;
-    app().innerHTML = `<section class="hero morning-hero"><span class="eyebrow">${esc(new Intl.DateTimeFormat(C.language,
+    app().innerHTML = `<section class="hero morning-hero"><div class="hero-copy"><span class="eyebrow">${esc(new Intl.DateTimeFormat(C.language,
       { weekday: "long", month: "long", day: "numeric" }).format(new Date(`${C.today()}T12:00:00`)))}</span>
-      <h1>${text(done ? "home.finishedTitle" : "home.title")}</h1><p>${text(done ? "home.finishedHelp" : "home.subtitle")}</p></section>
+      <h1>${text(done ? "home.finishedTitle" : "home.title")}</h1><p>${text(done ? "home.finishedHelp" : "home.subtitle")}</p>
+      <div class="hero-domains">${["working-memory", "attention", "reasoning"].map(domain =>
+        `<span data-domain="${domain}">${domainIcon(domain)}${text(`domain.${domain}`)}</span>`).join("")}</div>
+      </div>${orbitArt()}</section>
       <div class="morning-grid"><section class="card routine-card"><div class="section-heading"><div>
       <span class="eyebrow">${text("routine.eyebrow")}</span><h2>${text("routine.title")}</h2></div>
       <span class="tag">${icon("clock")}${minutes(routine.minutes)}</span></div>
@@ -151,18 +182,19 @@
       <aside class="stack"><section class="card consistency-card"><span class="eyebrow">${text("home.week")}</span>
       <h2>${text("home.practiceDays", { count: C.number(activity.count) })}</h2>${weekHTML(activity)}
       <p class="muted">${text("home.consistency")}</p></section>
-      <section class="card quiet-card"><h3>${text("home.pickTitle")}</h3><p class="muted">${text("home.pickHelp")}</p>
+      <section class="card quiet-card"><div class="library-symbol" aria-hidden="true">${["working-memory", "attention", "learning"].map(domain =>
+        `<span data-domain="${domain}">${domainIcon(domain)}</span>`).join("")}</div>
+      <h3>${text("home.pickTitle")}</h3><p class="muted">${text("home.pickHelp")}</p>
       <a href="#library" class="button secondary">${text("home.explore")}</a></section></aside></div>
       <p class="home-perspective">${text("home.perspective")} <a href="#about">${text("home.evidenceLink")}</a></p>`;
     document.getElementById("start-routine").onclick = () => { C.Routine.start(); location.hash = "routine"; };
     document.getElementById("routine-preferences")?.addEventListener("click", openPreferences);
   }
-  const category = task => ["processing-speed", "vigilance", "attention"].includes(task.domain) ? "attention" : task.domain;
   function taskCard(task, counts) {
     const q = taskParams(task), favorite = settings().favorites.includes(task.id);
     const next = settings().mode === "assessment" && task.supportsAssessment ? cooldown(task.id) : null;
     const estimate = C.Routine.estimateMinutes(task, q);
-    return `<article class="card task-card"><div class="task-card-heading">${domainLabel(task)}
+    return `<article class="card task-card" data-domain="${esc(category(task))}"><div class="task-card-heading">${domainLabel(task)}
       <button class="favorite-button secondary" data-favorite="${task.id}" aria-pressed="${favorite}"
         aria-label="${text(favorite ? "library.unsave" : "library.save", { name: C.t(task.nameKey) })}">${icon("star")}</button></div>
       <h3 class="task-title">${esc(taskTitle(task, q))}</h3><p class="task-desc">${text(task.descKey)}</p>
@@ -217,8 +249,8 @@
     app().innerHTML = `${context ? `<div class="routine-banner"><a href="#home">${text("routine.title")}</a>
       <span>${text("routine.round", { current: C.number(context.index + 1), total: C.number(context.routine.steps.length) })}</span>
       <span>${text("mode.training")}</span></div>` : `<a class="back-link" href="#library">${text("runner.backLibrary")}</a>`}
-      <section class="hero task-hero">${domainLabel(task)}<h1>${esc(taskTitle(task, q))}</h1><p>${text(task.descKey)}</p>
-      ${!context ? modeButtons(mode) : ""}</section><section class="card instruction-card stack">
+      <section class="hero task-hero" data-domain="${esc(category(task))}">${domainLabel(task)}<h1>${esc(taskTitle(task, q))}</h1><p>${text(task.descKey)}</p>
+      ${!context ? modeButtons(mode) : ""}</section><section class="card instruction-card stack" data-domain="${esc(category(task))}">
       <div class="section-heading"><h2>${text("runner.instructions")}</h2><span class="tag">${text("routine.approxMinutes",
         { count: C.number(C.Routine.estimateMinutes(task, q)) })}</span></div>
       <p class="guide">${text(guide, { n: C.number(q.n), operand: C.number(q.operand) })}</p>
@@ -675,8 +707,12 @@
   }
   function about() {
     app().innerHTML = `<section class="hero"><h1>${text("about.title")}</h1><p>${text("app.localOnly")}</p></section>
-      <section class="card prose">${["evidence", "ufov", "measurement", "modes", "reliability", "devices", "limitations", "privacy", "tierTwo"].map(key =>
-        `<h2>${text(`about.${key}`)}</h2><p>${text(`about.${key}Text`)}</p>`).join("")}</section>`;
+      <section class="card prose">${["evidence", "design", "ufov", "measurement", "modes", "reliability", "devices", "limitations", "privacy", "tierTwo"].map(key =>
+        `<h2>${text(`about.${key}`)}</h2><p>${text(`about.${key}Text`)}</p>`).join("")}
+      <h2>${text("about.designSources")}</h2><ul>
+      <li><a href="https://doi.org/10.3389/fpsyg.2015.00368">Elliot (2015): Color and psychological functioning</a></li>
+      <li><a href="https://doi.org/10.3389/fpsyg.2016.00784">Xia et al. (2016): Exploring the effect of red and blue on cognitive task performances</a></li>
+      <li><a href="https://www.w3.org/TR/WCAG22/">${text("about.accessibilitySource")}</a></li></ul></section>`;
   }
   function openPreferences(event) {
     if (C.active || C.starting) return;
@@ -807,7 +843,7 @@
     document.getElementById("abort").onpointerdown = event => { event.preventDefault(); C.active?.abort(); };
     app().addEventListener("click", event => {
       const mode = event.target.closest("[data-mode]"), input = event.target.closest("[data-input]");
-      const domain = event.target.closest("[data-domain]"), favorite = event.target.closest("[data-favorite]");
+      const domain = event.target.closest(".domain-filters button[data-domain]"), favorite = event.target.closest("[data-favorite]");
       const history = event.target.closest("[data-history-mode]");
       if (mode) {
         C.Storage.setSettings({ mode: mode.dataset.mode }); render();
@@ -817,7 +853,10 @@
         C.input = input.dataset.input; filterInput = C.input; C.Storage.setSettings({ inputMethod: C.input });
         render(); app().querySelector(`[data-input="${C.input}"]`)?.focus();
       }
-      if (domain) { libraryDomain = domain.dataset.domain; library(); app().querySelector(`[data-domain="${libraryDomain}"]`).focus(); }
+      if (domain) {
+        libraryDomain = domain.dataset.domain; library();
+        app().querySelector(`.domain-filters button[data-domain="${libraryDomain}"]`).focus();
+      }
       if (favorite) {
         const ids = settings().favorites, id = favorite.dataset.favorite;
         C.Storage.setSettings({ favorites: ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id] });

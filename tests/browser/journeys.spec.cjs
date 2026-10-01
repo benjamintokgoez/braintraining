@@ -68,6 +68,29 @@ test("search, categories, favorites and training/assessment mode keep clear keyb
   await expect(page.locator("#task-search")).toBeFocused();
 });
 
+test("decorative category cues do not act as filters or interfere with exercise controls", async ({ page }) => {
+  await open(page);
+  await page.locator(".hero-domains span").first().click();
+  await expect(page.locator("#start-routine")).toBeVisible();
+  await page.locator(".routine-list strong").first().click();
+  await expect(page.locator("#start-routine")).toBeVisible();
+  await open(page, "library");
+  await page.locator(".task-card .task-domain").first().click();
+  await expect(page.locator(".task-card")).toHaveCount(26);
+  await page.locator(".task-card .task-title").first().click();
+  await expect(page.locator(".task-card")).toHaveCount(26);
+  await page.locator('.domain-filters [data-domain="reasoning"]').click();
+  await expect(page.locator('.domain-filters [data-domain="reasoning"]')).toBeFocused();
+  await expect(page.locator('.task-card:not([data-domain="reasoning"])')).toHaveCount(0);
+  await page.locator(".task-card .button").first().click();
+  await expect(page.locator("#start-practice")).toBeVisible();
+  await page.locator(".task-hero .task-domain").click();
+  await expect(page.locator("#start-practice")).toBeVisible();
+  await page.locator('[data-input="mouse"]').click();
+  await expect(page.locator('[data-input="mouse"]')).toBeFocused();
+  await expect(page.locator("#start-practice")).toBeVisible();
+});
+
 test("general and exercise settings persist, validate ranges, and restore focus", async ({ page }) => {
   await open(page);
   await page.locator("#open-settings").click();

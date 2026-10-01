@@ -1,7 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <style>:root { --cp-bg: #f7f4ef; --cp-accent: #b11f4b; }</style>
+  <style>:root { --cp-bg: #193c2c; --cp-accent: #d2ef93; --cp-memory: #adc4f5; --cp-attention: #efca78; }</style>
   <rect width="192" height="192" fill="var(--cp-bg)"/>
   <g fill="none" stroke="var(--cp-accent)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M82 48H66L46 68v56l20 20h16M110 48h16l20 20v56l-20 20h-16M80 74h32M80 96h32M80 118h32"/>
   </g>
+  <circle cx="74" cy="168" r="4" fill="var(--cp-memory)"/>
+  <circle cx="96" cy="168" r="4" fill="var(--cp-attention)"/>
+  <circle cx="118" cy="168" r="4" fill="var(--cp-accent)"/>
 </svg>

@@ -1100,6 +1100,13 @@
     "home.explore": ["Browse exercises", "Übungen entdecken"],
     "home.perspective": ["Progress is specific to the tasks you practice, not a universal brain score.", "Fortschritt bezieht sich auf die geübten Aufgaben, nicht auf einen allgemeinen Gehirnwert."],
     "home.evidenceLink": ["Evidence & limitations", "Evidenz & Grenzen"],
+    "about.design": ["Color with a purpose, not a promise", "Farbe mit Funktion, ohne Versprechen"],
+    "about.designText": [
+      "Color research is context-dependent: a hue that helps one task may not help another. This palette is designed for clear navigation and comfortable reading, not proven cognitive enhancement. Forest green and lime anchor the interface; labeled icons pair cobalt with memory, ochre with attention, green with reasoning, copper with learning and slate with forecasting. The exercise backgrounds and stimulus colors stay consistent across themes. Decoration remains outside timed rounds; motion respects your device's reduced-motion setting.",
+      "Farbforschung ist kontextabhängig: Ein Farbton, der bei einer Aufgabe hilft, muss bei einer anderen nicht helfen. Diese Palette dient klarer Orientierung und angenehmer Lesbarkeit, nicht einer nachgewiesenen Steigerung der Denkfähigkeit. Waldgrün und Limette prägen die Oberfläche. Beschriftete Symbole verbinden Kobaltblau mit Gedächtnis, Ocker mit Aufmerksamkeit, Grün mit Denken, Kupfer mit Lernen und Schieferblau mit Prognosen. Hintergründe und Reizfarben der Übungen bleiben in beiden Designs gleich. Dekoration bleibt außerhalb der zeitgemessenen Runden; Bewegung berücksichtigt die Einstellung für reduzierte Bewegung."
+    ],
+    "about.designSources": ["Color & accessibility references", "Quellen zu Farbe & Zugänglichkeit"],
+    "about.accessibilitySource": ["W3C: Web Content Accessibility Guidelines 2.2", "W3C: Richtlinien für barrierefreie Webinhalte 2.2"],
     "routine.eyebrow": ["A steady start", "Ein ruhiger Start"],
     "routine.title": ["Morning practice", "Morgentraining"],
     "routine.intro": ["A balanced mix of focus, memory and reasoning. Find a quiet spot and take it one round at a time.", "Eine ausgewogene Mischung aus Fokus, Gedächtnis und Denken. Suche dir einen ruhigen Ort und beginne mit der ersten Runde."],

@@ -5,7 +5,7 @@
     const style = getComputedStyle(document.documentElement);
     return Object.fromEntries(["task-bg", "task-fg", "task-panel", "stim-red", "stim-green", "stim-blue", "stim-yellow",
       "stim-gray", "accent", "accent-fg", "border", "surface", "text", "text-muted"].map(name =>
-      [name, style.getPropertyValue(`--cp-${name}`).trim()]));
+      [name, style.getPropertyValue(`--cp-${name.startsWith("accent") ? "task-" : ""}${name}`).trim()]));
   };
   C.Draw = {
     palette: null,

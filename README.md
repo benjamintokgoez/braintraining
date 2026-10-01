@@ -49,6 +49,16 @@ Updates are offered explicitly. They do not automatically reload another tab or 
 
 Audio n-back uses **local speech voices only**, with distinct letter-name and word sets. Use the audio preview to check the selected language on your device. If a local voice is unavailable, audio practice is blocked with a notice; it does not silently use a remote voice or replace speech with tones.
 
+## Visual design and color evidence
+
+Cortex uses forest green and lime as its visual identity, with cobalt (memory), ochre (attention), green (reasoning), copper (learning) and slate (forecasting). Category colors always accompany written labels and distinct icons. Light and dark themes use semantic `--cp-*` tokens, contrast-tested text, visible focus indicators and reduced-motion support. The decorative orbital illustration is static and never appears in a timed round. Exercise backgrounds and stimulus colors remain independent of the interface theme.
+
+This is an evidence-informed usability decision, **not a claim that a palette improves cognition**. Color-psychology findings depend on task, difficulty, context and individual differences; effects of blue-enriched illumination are not evidence that a blue button improves performance. The palette prioritizes readable contrast, predictable navigation and restrained decoration over physiological or clinical promises.
+
+- [Elliot (2015), *Color and psychological functioning: a review of theoretical and empirical work*](https://doi.org/10.3389/fpsyg.2015.00368) describes the field's methodological and contextual limitations.
+- [Xia et al. (2016), *Exploring the effect of red and blue on cognitive task performances*](https://doi.org/10.3389/fpsyg.2016.00784) finds effects moderated by task type and difficulty, not a universally superior color.
+- [W3C WCAG 2.2](https://www.w3.org/TR/WCAG22/) supplies the practical contrast, non-color-only information and keyboard-focus requirements. This does not change the app's existing limits on nonvisual exercise accessibility.
+
 ## Progress and measurement limits
 
 Progress is specific to the exercises practiced, not an IQ score, diagnosis, treatment or guarantee of general cognitive improvement. Read **Evidence & limitations** in the app.

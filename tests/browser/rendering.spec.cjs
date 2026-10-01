@@ -52,13 +52,86 @@ test("rendered interface text meets contrast thresholds in both themes, includin
   });
   for (const theme of ["light", "dark"]) {
     await page.evaluate(theme => { window.Cortex.Storage.setSettings({ theme }); window.Cortex.UI.render(); }, theme);
-    for (const route of ["home", "library", "results", "data", "task/forecasting", "task/number-series"]) {
+    for (const route of ["home", "library", "results", "data", "about", "task/forecasting", "task/number-series"]) {
       await open(page, route);
       if (route === "results") await page.locator("#result-task").selectOption("flanker-squared");
       expect(await contrastFailures(page), `${theme} ${route}`).toEqual([]);
       await noOverflow(page);
     }
   }
+});
+
+test("category colors, focus and exercise palettes remain accessible and consistent across appearances", async ({ page }) => {
+  await open(page);
+  let exercisePalette;
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(theme => {
+      window.Cortex.Storage.setSettings({ theme });
+      window.Cortex.UI.render();
+    }, theme);
+    const palette = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement);
+      const color = name => style.getPropertyValue(`--cp-${name}`).trim();
+      const luminance = hex => {
+        if (!/^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(hex)) throw new Error(`Expected hex color: ${hex}`);
+        const value = hex.length === 4 ? [...hex.slice(1)].map(char => char + char).join("") : hex.slice(1);
+        return value.match(/../g).map(channel => parseInt(channel, 16) / 255)
+          .map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
+          .reduce((sum, channel, index) => sum + channel * [.2126, .7152, .0722][index], 0);
+      };
+      const ratio = (foreground, background) => {
+        const a = luminance(color(foreground)), b = luminance(color(background));
+        return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+      };
+      const text = ["accent", "memory", "attention", "reasoning", "learning", "calibration"]
+        .map(name => ({ name, ratio: ratio(name, `${name}-soft`) }));
+      text.push({ name: "primary button", ratio: ratio("accent-fg", "accent") });
+      for (const name of ["hero-text", "hero-muted", "hero-lime", "hero-blue", "hero-gold"]) {
+        text.push({ name, ratio: ratio(name, "hero-bg") });
+      }
+      const nonText = ["bg", "surface", "bg-elevated", "surface-soft", "memory-soft", "reasoning-soft"]
+        .flatMap(background => ["accent", "border-strong"].map(foreground =>
+          ({ name: `${foreground} on ${background}`, ratio: ratio(foreground, background) })));
+      nonText.push({ name: "exercise focus", ratio: ratio("task-accent", "task-bg") });
+      return {
+        text, nonText,
+        exercise: Object.fromEntries(["task-bg", "task-fg", "task-panel", "task-accent", "task-accent-fg",
+          "stim-red", "stim-green", "stim-blue", "stim-yellow", "stim-gray"].map(name => [name, color(name)])),
+        renderedAccent: window.Cortex.Draw.palette.accent,
+        background: color("bg"),
+        themeColor: document.querySelector('meta[name="theme-color"]').content
+      };
+    });
+    for (const color of palette.text) expect(color.ratio, `${theme}: ${color.name}`).toBeGreaterThanOrEqual(4.5);
+    for (const color of palette.nonText) expect(color.ratio, `${theme}: ${color.name}`).toBeGreaterThanOrEqual(3);
+    expect(palette.themeColor).toBe(palette.background);
+    expect(palette.renderedAccent).toBe(palette.exercise["task-accent"]);
+    if (exercisePalette) expect(palette.exercise).toEqual(exercisePalette);
+    else exercisePalette = palette.exercise;
+    await open(page, "library");
+    const categories = await page.locator(".task-card").evaluateAll(cards => cards.map(card => ({
+      domain: card.dataset.domain,
+      label: card.querySelector(".task-domain").textContent.trim(),
+      icons: card.querySelectorAll(".task-domain svg[aria-hidden='true']").length
+    })));
+    expect(new Set(categories.map(card => card.domain))).toEqual(new Set(["working-memory", "attention", "reasoning", "learning", "calibration"]));
+    for (const card of categories) {
+      expect(card.label).toBeTruthy();
+      expect(card.icons).toBe(1);
+    }
+    await page.locator(".task-card .button").first().focus();
+    const focus = await page.locator(".task-card .button").first().evaluate(button => {
+      const style = getComputedStyle(button);
+      return { width: style.outlineWidth, style: style.outlineStyle };
+    });
+    expect(focus).toEqual({ width: "3px", style: "solid" });
+    await page.locator(".task-card").first().hover();
+    expect(await contrastFailures(page), `${theme}: hovered library`).toEqual([]);
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await open(page);
+  expect(await page.locator(".orbit-art").getAttribute("aria-hidden")).toBe("true");
+  expect(await page.locator("#start-routine").evaluate(button => getComputedStyle(button).transitionDuration)).toBe("0s");
 });
 
 test("actual spatial and matrix exercises have readable portrait/landscape scenes and 44-pixel native controls", async ({ page }, testInfo) => {
