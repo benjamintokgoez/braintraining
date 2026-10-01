@@ -17,11 +17,11 @@
           preference : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       })();
     </script>
-    <title data-i18n="app.title">Cortex</title>
-    <meta name="description" content="A calm, local-first daily practice space for memory, attention and reasoning.">
+    <title data-i18n="app.title">Bennys Brain Gym</title>
+    <meta name="description" content="Bennys Brain Gym: challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.">
     <meta name="theme-color" content="#f3f5ef">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Cortex">
+    <meta name="apple-mobile-web-app-title" content="Bennys Brain Gym">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="manifest" href="manifest.webmanifest">
@@ -47,12 +47,12 @@
     <header id="header">
       <div class="shell">
         <div class="header-inner">
-          <a class="brand" href="#home">
+          <a class="brand" href="#home" aria-label="Bennys Brain Gym" data-i18n-aria="app.title">
             <svg class="brand-mark" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
               <rect class="brand-tile" width="32" height="32" rx="8"></rect>
-              <path d="M13 5H9L4 10v12l5 5h4M19 5h4l5 5v12l-5 5h-4M12 11h8M12 16h8M12 21h8"></path>
+              <path d="M16 7c-2-3-6-2-6 1-3 0-4 4-2 6-1 3 1 5 4 5M16 7c2-3 6-2 6 1 3 0 4 4 2 6 1 3-1 5-4 5M16 7v12m-5-8 3 2m7-2-3 2M8 25h16m-16-3v6m16-6v6M5 23v4m22-4v4"></path>
             </svg>
-            <span class="brand-text">Cortex<small><span data-i18n="app.tagline"></span></small></span>
+            <span class="brand-text"><span class="brand-name">Bennys <span>Brain Gym</span></span><small><span data-i18n="app.tagline"></span></small></span>
           </a>
           <nav class="main-nav" data-i18n-aria="nav.main">
             <a href="#home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3Z M9 20v-7h6v7"/></svg><span data-i18n="nav.home">Today</span></a>
@@ -68,7 +68,7 @@
 
     <div id="notifications" class="shell" aria-live="polite" aria-atomic="true"></div>
     <main id="app" class="shell" tabindex="-1"></main>
-    <noscript><p class="shell">Cortex needs JavaScript to run its exercises. Enable JavaScript and reload. No account is required.</p></noscript>
+    <noscript><p class="shell">Bennys Brain Gym needs JavaScript to run its exercises. Enable JavaScript and reload. No account is required.</p></noscript>
 
     <section id="runner" hidden aria-describedby="runner-description">
       <canvas id="stage" tabindex="0" role="img" aria-describedby="runner-description"></canvas>

@@ -1,6 +1,8 @@
-# Cortex
+# Bennys Brain Gym
 
-A calm, local-first space for daily memory, attention and reasoning practice. Cortex has 25 timed exercises and an untimed forecasting journal, with English/German interfaces, keyboard/mouse/touch controls, and no account or backend.
+Challenging brain training, not easy-win games. Bennys Brain Gym is a serious, local-first tool for memory, attention and reasoning practice, with 25 timed exercises and an untimed forecasting journal. It supports English/German interfaces, keyboard/mouse/touch controls, and requires no account or backend.
+
+There are no points, badges, leaderboards or streak rewards. Progress records describe your practice, not a game to win. Supported adaptive exercises use your responses to adjust difficulty within your configured bounds and remember eligible progress for the same setup. Assessments remain fixed; not every exercise adapts. The purpose is meaningful, repeatable practice, not a claim of general cognitive improvement or medical benefit.
 
 ## Run locally
 
@@ -51,7 +53,7 @@ Audio n-back uses **local speech voices only**, with distinct letter-name and wo
 
 ## Visual design and color evidence
 
-Cortex uses forest green and lime as its visual identity, with cobalt (memory), ochre (attention), green (reasoning), copper (learning) and slate (forecasting). Category colors always accompany written labels and distinct icons. Light and dark themes use semantic `--cp-*` tokens, contrast-tested text, visible focus indicators and reduced-motion support. The decorative orbital illustration is static and never appears in a timed round. Exercise backgrounds and stimulus colors remain independent of the interface theme.
+Bennys Brain Gym uses forest green and lime as its visual identity, with cobalt (memory), ochre (attention), green (reasoning), copper (learning) and slate (forecasting). Category colors always accompany written labels and distinct icons. Light and dark themes use semantic `--cp-*` tokens, contrast-tested text, visible focus indicators and reduced-motion support. The decorative orbital illustration is static and never appears in a timed round. Exercise backgrounds and stimulus colors remain independent of the interface theme.
 
 This is an evidence-informed usability decision, **not a claim that a palette improves cognition**. Color-psychology findings depend on task, difficulty, context and individual differences; effects of blue-enriched illumination are not evidence that a blue button improves performance. The palette prioritizes readable contrast, predictable navigation and restrained decoration over physiological or clinical promises.
 
@@ -77,6 +79,8 @@ Open **Your data**, or **Settings > Backups & data**, to export and restore.
 - **CSV** is for analysis, not restoration. Formula-like text is neutralized without turning negative numeric values into text formulas.
 - Restore merges records. Identical sessions and trial rows are deduplicated; conflicting sessions are preserved as variants. Repeatedly restoring the same conflict does not create endless copies. Existing local preferences and adaptive state win on a nonempty restore; an empty restore adopts the incoming preferences.
 - Forecast claims/probabilities are immutable after saving. Compatible open-to-resolved imports can update outcomes; incompatible variants require explicit conflict review. Accepting a variant voids the previous non-conflict version rather than silently combining contradictory forecasts.
+
+The rebrand retains the existing app URL, manifest identity and storage keys, so installed apps and saved history remain compatible. New downloads use the `bennys-brain-gym-` prefix; older JSON backups still restore without renaming or migration.
 
 Data remains in browser `localStorage` under **`cortex.v1`**, with root schema version **1**. Forecast drafts are tab-local in `sessionStorage`; an unsaved draft is not included in a JSON backup. Save it as a forecast before exporting, or copy it out if browser draft storage is unavailable.
 

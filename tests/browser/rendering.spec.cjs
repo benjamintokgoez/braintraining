@@ -244,6 +244,7 @@ test("unreadable originals and quota-limited pending work remain exportable with
   const originalDownload = page.waitForEvent("download");
   await page.locator("#export-original").click();
   const original = await originalDownload;
+  expect(original.suggestedFilename()).toMatch(/^bennys-brain-gym-recovery-\d{4}-\d{2}-\d{2}\.json$/);
   expect(await readFile(await original.path(), "utf8")).toBe("{broken");
   await page.evaluate(() => {
     window.Cortex.Storage.wipe("DELETE");

@@ -364,6 +364,11 @@ pre {
   letter-spacing: 0.035em;
 }
 
+.brand-name,
+.brand-name > span {
+  white-space: nowrap;
+}
+
 .main-nav {
   display: flex;
   align-items: center;
@@ -2073,7 +2078,11 @@ html[data-theme="dark"] textarea::placeholder {
   }
 
   .brand small {
-    font-size: 0.625rem;
+    display: none;
+  }
+
+  .brand-name > span {
+    display: block;
   }
 
   .header-controls {

@@ -49,7 +49,7 @@ if (require.main === module) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new RangeError("Port must be between 1 and 65535");
   const server = createStaticServer();
   server.on("error", error => { console.error("Server failed:", error.message); process.exitCode = 1; });
-  server.listen(port, values.host, () => console.log(`Cortex: http://${values.host}:${port}`));
+  server.listen(port, values.host, () => console.log(`Bennys Brain Gym: http://${values.host}:${port}`));
 }
 
 module.exports = { createStaticServer };

@@ -21,7 +21,7 @@
   const signed = (minimum, maximum) => random(minimum, maximum) * pick([-1, 1]);
   const equal = (left, right) => C.canonical(left) === C.canonical(right);
   const requireInvariant = (condition, message) => {
-    if (!condition) throw new Error(`Cortex generator invariant: ${message}`);
+    if (!condition) throw new Error(`Bennys Brain Gym generator invariant: ${message}`);
   };
 
   function validateArguments(level, usedSet) {

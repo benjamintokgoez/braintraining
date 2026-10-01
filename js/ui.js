@@ -123,6 +123,7 @@
   function header() {
     document.documentElement.lang = C.language;
     document.title = C.t("app.title");
+    document.querySelector('meta[name="description"]')?.setAttribute("content", C.t("app.description"));
     document.querySelectorAll("[data-i18n]").forEach(node => { node.textContent = C.t(node.dataset.i18n); });
     document.querySelectorAll("[data-i18n-aria]").forEach(node => node.setAttribute("aria-label", C.t(node.dataset.i18nAria)));
     const route = (location.hash.slice(1) || "home").split("/")[0];
@@ -648,7 +649,7 @@
   function exportCSV() {
     const keys = ["id", "taskId", "mode", "startedAt", "durationMs", "language", "deviceClass", "inputMethod", "refreshHz", "viewport",
       "invalid", "invalidReasons", "practiceOnly", "completedMain", "practiceCount", "protocolVersion", "routineId", "params", "score"];
-    C.download(`cortex-${C.iso().slice(0, 10)}.csv`, "\ufeff" + [keys.map(C.csvCell).join(","),
+    C.download(`bennys-brain-gym-${C.iso().slice(0, 10)}.csv`, "\ufeff" + [keys.map(C.csvCell).join(","),
       ...C.Storage.getSessions().map(row => keys.map(key => C.csvCell(row[key])).join(","))].join("\r\n"), "text/csv;charset=utf-8");
   }
   function dataView() {
@@ -707,7 +708,7 @@
   }
   function about() {
     app().innerHTML = `<section class="hero"><h1>${text("about.title")}</h1><p>${text("app.localOnly")}</p></section>
-      <section class="card prose">${["evidence", "design", "ufov", "measurement", "modes", "reliability", "devices", "limitations", "privacy", "tierTwo"].map(key =>
+      <section class="card prose">${["purpose", "evidence", "design", "ufov", "measurement", "modes", "reliability", "devices", "limitations", "privacy", "tierTwo"].map(key =>
         `<h2>${text(`about.${key}`)}</h2><p>${text(`about.${key}Text`)}</p>`).join("")}
       <h2>${text("about.designSources")}</h2><ul>
       <li><a href="https://doi.org/10.3389/fpsyg.2015.00368">Elliot (2015): Color and psychological functioning</a></li>

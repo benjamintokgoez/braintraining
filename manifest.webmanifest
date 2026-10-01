@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Cortex",
-  "short_name": "Cortex",
-  "description": "A calm daily practice space for memory, attention and reasoning.",
+  "name": "Bennys Brain Gym",
+  "short_name": "Bennys Gym",
+  "description": "Challenging brain training, not easy-win games. Adaptive exercises respond to your performance. Serious practice, honest progress.",
   "start_url": "./#home",
   "scope": "./",
   "display": "standalone",

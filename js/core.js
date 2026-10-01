@@ -225,7 +225,7 @@ window.Cortex = {};
     get hasUnreadableOriginal() { return unreadableOriginal !== null; },
     exportOriginal() {
       if (unreadableOriginal === null) throw new Error("data.invalid");
-      C.download(`cortex-recovery-${C.iso().slice(0, 10)}.json`, unreadableOriginal, "application/json");
+      C.download(`bennys-brain-gym-recovery-${C.iso().slice(0, 10)}.json`, unreadableOriginal, "application/json");
     },
     getSettings: () => C.clone(root.settings),
     setSettings(settings) { root.settings = { ...root.settings, ...sanitize(C.clone(settings)) }; return persist(); },
@@ -304,7 +304,7 @@ window.Cortex = {};
     snapshot: () => C.clone(root),
     exportAll() {
       const text = JSON.stringify(root, null, 2);
-      C.download(`cortex-${C.iso().slice(0, 10)}.json`, text, "application/json");
+      C.download(`bennys-brain-gym-${C.iso().slice(0, 10)}.json`, text, "application/json");
       return text;
     },
     async importAll(file) {

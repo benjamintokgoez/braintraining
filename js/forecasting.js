@@ -80,7 +80,7 @@
     const fields = ["id","claim","topic","probability","resolveBy","createdAt","language","status","outcome","resolvedAt","conflictOf"];
     const rows = C.Storage.getForecasts();
     const csv = "\ufeff" + [fields.map(C.csvCell).join(","), ...rows.map(row => fields.map(key => C.csvCell(row[key])).join(","))].join("\r\n");
-    C.download(`cortex-forecasts-${C.iso().slice(0, 10)}.csv`, csv, "text/csv;charset=utf-8");
+    C.download(`bennys-brain-gym-forecasts-${C.iso().slice(0, 10)}.csv`, csv, "text/csv;charset=utf-8");
   }
   const task = {
     tier: 2, kind: "journal", supportsAssessment: false, staircase: null, languageDependent: true,
