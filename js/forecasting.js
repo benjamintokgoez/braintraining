@@ -137,7 +137,8 @@
               ${entry.status !== "void" ? `<button data-forecast-void="${C.escape(entry.id)}">${text("forecast.void")}</button>` : ""}</div></td></tr>`;
           }).join("")}</tbody></table></div>${!visible.length ? `<p class="empty">${text("forecast.noEntries")}</p>` : ""}
         <div class="actions"><button id="forecast-prev" ${pageIndex === 0 ? "disabled" : ""}>${text("forecast.previous")}</button>
-          <button id="forecast-next" ${(pageIndex + 1) * q.pageSize >= visible.length ? "disabled" : ""}>${text("forecast.next")}</button></div></section>`;
+          <button id="forecast-next" ${(pageIndex + 1) * q.pageSize >= visible.length ? "disabled" : ""}>${text("forecast.next")}</button></div></section>
+          ${C.UI.researchCard(registry)}`;
       const redraw = focusId => {
         task.renderView(container);
         if (focusId) document.getElementById(focusId).focus();

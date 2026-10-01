@@ -12,6 +12,7 @@
   const sessionRoute = id => `session/${encodeURIComponent(id)}`;
   let selectedTask = C.Storage.getSessions(null, {}, 1)[0]?.taskId || "dual-nback";
   let filterDevice = C.device(), filterInput = C.input, overlay = false, historyMode = "training", historyPage = 0;
+  let selectedJourneyKey = null, journeyMetric = null;
   let libraryDomain = "all", librarySearch = "", favoritesOnly = false, startVersion = 0;
   const dialogOpeners = new WeakMap();
   function showDialog(dialog, opener) {
@@ -274,7 +275,7 @@
       ${familiar ? `<button id="optional-practice" class="secondary">${text("runner.optionalPractice")}</button>` : ""}
       ${!context ? `<button class="secondary" id="task-settings">${text("settings.title")}</button>` :
         `<button class="secondary" id="skip-round">${text("routine.skip")}</button>`}</div>
-      ${next ? `<p class="warning">${text("home.assessmentWait", { date: C.date(next) })}</p>` : ""}</section>`;
+      ${next ? `<p class="warning">${text("home.assessmentWait", { date: C.date(next) })}</p>` : ""}</section>${researchCard(task)}`;
     const options = { mode, params: q, context };
     document.getElementById(familiar ? "start-round" : "start-practice").onclick = () => startPractice(task, { ...options, skip: familiar });
     document.getElementById("optional-practice")?.addEventListener("click", () => startPractice(task, options));
@@ -504,15 +505,75 @@
       <details class="result-detail"><summary>${text("results.details")}</summary>${metricsHTML(session.score)}
       <p class="muted">${text("results.excluded", { count: C.number(session.score.excluded || 0) })}</p>
       <p>${text(C.Storage.getTrials(id).length ? "results.retained" : "results.noTrials")}</p>
-      <pre>${esc(JSON.stringify(session, null, 2))}</pre></details></section>`;
+      <pre>${esc(JSON.stringify(session, null, 2))}</pre></details></section>
+      ${task && !session.practiceOnly ? journeyCard(task, session) : ""}${task ? researchCard(task) : ""}`;
     document.getElementById("skip-round")?.addEventListener("click", () => { C.Routine.skip(); location.hash = "routine"; });
   }
-  const seriesKey = (task, session) => C.canonical({
-    params: session.params, device: session.deviceClass, input: session.inputMethod,
-    language: task.languageDependent ? session.language : "neutral", stimulusSet: session.stimulusSet,
-    protocol: session.protocolVersion || 1, orientation: C.layoutOrientation(session.viewport)
-  });
-  C.seriesKey = seriesKey;
+  const seriesKey = C.seriesKey;
+  const progressValue = (metric, value) => {
+    const label = C.metric(metric, value);
+    return Number.isFinite(value) && (metric === "ssrt" || metric === "meanRT" || /Threshold$/.test(metric) &&
+      metric !== "estimatedThreshold") ? C.t("journey.milliseconds", { value: label }) : label;
+  };
+  const processingDeadline = row => Number.isFinite(row.processingDeadlineMs) ?
+    `<p>${text("journey.processingDeadline", { value: C.number(row.processingDeadlineMs) })}</p>` : "";
+  function researchCard(task) {
+    const [family, studies] = C.Evidence.families[task.id];
+    const refs = [...new Set([...studies, "reliability", ...(task.kind === "journal" ? [] : ["timing", "transfer"])])];
+    return `<section class="card research-card stack"><div class="section-heading"><h2>${text("evidence.title")}</h2>
+      <span class="tag">${text("evidence.unavailable")}</span></div><p>${text("evidence.noRanking")}</p>
+      <p class="muted">${text(`evidence.${family}`)}</p><details><summary>${text("evidence.sources")}</summary>
+      <div class="stack"><p>${text("evidence.scope")}</p><ul class="research-links">${refs.map(id => {
+        const [authors, title, doi] = C.Evidence.sources[id];
+        return `<li><a href="https://doi.org/${esc(doi)}" target="_blank" rel="noopener noreferrer">${esc(authors)}:
+          ${esc(title)}</a></li>`;
+      }).join("")}</ul><h3>${text("evidence.futureTitle")}</h3><p>${text("evidence.future")}</p>
+      <p>${text("evidence.agePrivacy")}</p></div></details></section>`;
+  }
+  function journeyCard(task, anchor, controls = "", metric = task.primaryMetric) {
+    const summary = C.Progress.summarize(task, C.Storage.getSessions(), anchor, metric);
+    const value = number => esc(progressValue(metric, number));
+    const dateRange = dates => dates.length ? esc(`${C.dayLabel(Date.parse(dates[0]))} – ${C.dayLabel(Date.parse(dates.at(-1)))}`) : "";
+    const difference = C.metric(metric, 1).endsWith("%") ?
+      C.t("journey.points", { value: C.number(Math.abs(summary.delta) * 100, 1) }) : progressValue(metric, Math.abs(summary.delta));
+    const change = summary.delta === null ? C.t("common.noValue") : summary.movement === "unchanged" ?
+      C.t("journey.unchanged") : C.t(`journey.${summary.movement}`, { value: difference });
+    const missing = anchor && (!Number.isFinite(anchor.score?.[metric]) || summary.total > summary.count);
+    const accuracy = summary.context.find(row => row.metric === "accuracy");
+    return `<section class="card journey-card stack" data-journey-status="${summary.status}">
+      <div class="section-heading"><div><span class="eyebrow">${text("journey.eyebrow")}</span>
+      <h2>${text(`journey.${summary.status}Title`)}</h2></div><span class="tag">${text(`mode.${anchor?.mode || historyMode}`)}</span></div>
+      ${controls}<p>${text(`journey.${summary.status}Help`, { remaining: C.number(summary.remaining) })}</p>
+      <p class="muted">${text("journey.count", { count: C.number(summary.count), total: C.number(summary.total) })}</p>
+      ${anchor?.invalid || anchor?.completedMain === false || anchor?.importSourceId ? `<p class="notice warning">${text("journey.excluded")}</p>` : ""}
+      ${missing ? `<p class="fine-print">${text("journey.missing")}</p>` : ""}
+      <div class="metrics"><div class="metric"><strong>${value(summary.latest)}</strong><span>${text("journey.latest")}</span></div>
+      <div class="metric"><strong>${value(summary.baseline)}</strong><span>${text("journey.baselineLabel")}</span>
+      <small class="muted">${dateRange(summary.baselineDates)}</small></div>
+      <div class="metric"><strong>${value(summary.recent)}</strong><span>${text("journey.recentLabel")}</span>
+      <small class="muted">${dateRange(summary.recentDates)}</small></div>
+      <div class="metric journey-change"><strong>${esc(change)}</strong><span>${text("journey.change")}</span></div></div>
+      <p class="fine-print">${text(`journey.direction.${summary.direction}`)} · ${text(`score.${metric}`)}</p>
+      ${accuracy && Number.isFinite(accuracy.baseline) && Number.isFinite(accuracy.recent) && accuracy.recent < accuracy.baseline ?
+        `<p class="notice journey-accuracy">${text("journey.accuracyDrop", { baseline: C.metric("accuracy", accuracy.baseline),
+          recent: C.metric("accuracy", accuracy.recent) })}</p>` : ""}
+      ${summary.range ? `<p class="muted">${text("journey.range", { low: progressValue(metric, summary.range[0]),
+        high: progressValue(metric, summary.range[1]) })}</p>` : ""}
+      ${summary.context.length ? `<details><summary>${text("journey.context")}</summary><p>${text("journey.contextHelp")}</p>
+      <div class="table-scroll"><table><thead><tr><th scope="col">${text("results.score")}</th>
+      <th scope="col">${text("journey.baselineLabel")}</th><th scope="col">${text("journey.recentLabel")}</th></tr></thead>
+      <tbody>${summary.context.map(row => `<tr><th scope="row">${text(`score.${row.metric}`)}</th>
+        <td>${esc(progressValue(row.metric, row.baseline))}</td><td>${esc(progressValue(row.metric, row.recent))}</td></tr>`).join("")}
+      </tbody></table></div></details>` : ""}
+      <details><summary>${text("journey.method")}</summary><div class="stack"><p>${text("journey.methodHelp")}</p>
+      <p>${text(anchor?.mode === "assessment" ? "journey.assessmentNote" : "journey.adaptiveNote")}</p>
+      ${anchor ? `<p>${text("results.device")}: ${text(`device.${anchor.deviceClass}`)} · ${text("results.input")}:
+      ${text(`input.${anchor.inputMethod}`)} · ${text(`layout.${C.layoutOrientation(anchor.viewport)}`)}</p>
+      <p>${text("results.protocolVersion", { count: C.number(anchor.protocolVersion || 1) })} · ${text("results.stimulusSet")}:
+      ${text(`stimulus.${anchor.stimulusSet}`)}${task.languageDependent ? ` · ${esc(anchor.language.toUpperCase())}` : ""}</p>
+      <code>${esc(C.canonical(anchor.params))}</code>${processingDeadline(anchor)}` : ""}
+      <p>${text("journey.limits")}</p></div></details></section>`;
+  }
   function chart(task, mode, metric) {
     const metrics = Array.isArray(metric) ? metric : [metric];
     const all = C.Storage.getSessions(task.id).filter(session => !session.practiceOnly);
@@ -556,7 +617,7 @@
         <title>${esc(`${C.date(row.startedAt)} · ${label} · ${C.metric(row.plottedMetric, row.plottedValue)}`)}</title></circle>`;
       legend.push(`<li><span class="series-key" style="--cp-series-color:var(${color})">${esc(label)}</span><details><summary>${text("results.parameters")}</summary>
         <code>${esc(C.canonical(sample.params))}</code><p>${text("results.stimulusSet")}: ${text(`stimulus.${sample.stimulusSet}`)}</p>
-        <p>${text("results.protocolVersion", { count: C.number(sample.protocolVersion || 1) })}</p></details></li>`);
+        <p>${text("results.protocolVersion", { count: C.number(sample.protocolVersion || 1) })}</p>${processingDeadline(sample)}</details></li>`);
     }
     svg += `<text x="64" y="216">${esc(C.dayLabel(xMin))}</text><text x="${width - 24}" y="216" text-anchor="end">${esc(C.dayLabel(xMax))}</text></svg>`;
     return `<article class="card chart-card"><h3>${esc(title)}</h3><div class="chart-scroll">${svg}</div>
@@ -590,11 +651,24 @@
     const page = rows.slice(historyPage * pageSize, (historyPage + 1) * pageSize);
     const metrics = task.metrics || [task.primaryMetric];
     const charts = task.combineMetrics ? chart(task, historyMode, metrics) : metrics.map(metric => chart(task, historyMode, metric)).join("");
+    const setups = C.Progress.groups(task, sessions, historyMode, filterDevice, filterInput);
+    const setup = setups.find(group => group.key === selectedJourneyKey) || setups[0];
+    selectedJourneyKey = setup?.key || null;
+    const journeyMetrics = metrics.filter(metric => C.Progress.directions[metric]);
+    if (!journeyMetrics.includes(journeyMetric)) journeyMetric = task.primaryMetric;
+    const journeyControls = `<div class="settings-grid">${setups.length ? `<label class="field">${text("journey.setup")}
+      <select id="journey-setup">${setups.map((group, index) => `<option value="${esc(group.anchor.id)}"
+        ${group === setup ? "selected" : ""}>${text("journey.setupOption", { index: C.number(index + 1),
+          date: C.date(group.anchor.startedAt), count: C.number(group.rows.length) })}</option>`).join("")}</select></label>` : ""}
+      <label class="field">${text("results.score")}<select id="journey-metric">${journeyMetrics.map(metric =>
+        `<option value="${metric}" ${metric === journeyMetric ? "selected" : ""}>${text(`score.${metric}`)}</option>`).join("")}</select></label></div>`;
     app().innerHTML = `<section class="hero"><span class="eyebrow">${text("nav.results")}</span><h1>${text("results.title")}</h1>
       <p>${text("results.subtitle")}</p></section><section class="card progress-overview"><div>
       <h2>${text("home.practiceDays", { count: C.number(activity.count) })}</h2><p class="muted">${text("home.week")}</p></div>${weekHTML(activity)}</section>
+      ${filterBar()}${modeButtons(historyMode, "data-history-mode")}
+      ${journeyCard(task, setup?.anchor, journeyControls, journeyMetric)}${researchCard(task)}
       ${!sessions.length ? `<section class="empty"><h2>${text("results.firstTitle")}</h2><p>${text("results.firstHelp")}</p>
-        <a href="#home" class="button primary">${text("routine.start")}</a></section>` : `${filterBar()}${modeButtons(historyMode, "data-history-mode")}
+        <a href="#home" class="button primary">${text("routine.start")}</a></section>` : `
       ${task.languageDependent ? `<p class="fine-print">${text("results.languageNote")}</p>` : ""}
       ${overlay ? `<p class="notice warning">${text("results.notComparable")}</p>` : ""}
       ${task.id === "ufov" ? `<details><summary>${text("results.thresholdHelp")}</summary><p>${text("results.thresholdNote")}</p></details>` : ""}
@@ -613,7 +687,14 @@
       ${rows.length > pageSize ? `<div class="actions"><button id="history-prev" class="secondary" ${historyPage === 0 ? "disabled" : ""}>${text("forecast.previous")}</button>
       <span>${text("forecast.pagination", { from: C.number(historyPage * pageSize + 1), to: C.number(Math.min(rows.length, (historyPage + 1) * pageSize)),
         total: C.number(rows.length) })}</span><button id="history-next" class="secondary" ${(historyPage + 1) * pageSize >= rows.length ? "disabled" : ""}>${text("forecast.next")}</button></div>` : ""}</section>`}`;
-    if (sessions.length) bindFilters(results);
+    bindFilters(results);
+    document.getElementById("journey-setup")?.addEventListener("change", event => {
+      selectedJourneyKey = setups.find(group => group.anchor.id === event.target.value).key;
+      results(); document.getElementById("journey-setup").focus();
+    });
+    document.getElementById("journey-metric").onchange = event => {
+      journeyMetric = event.target.value; results(); document.getElementById("journey-metric").focus();
+    };
     document.getElementById("history-prev")?.addEventListener("click", () => { historyPage--; results(); document.getElementById("history-heading").focus(); });
     document.getElementById("history-next")?.addEventListener("click", () => { historyPage++; results(); document.getElementById("history-heading").focus(); });
   }
@@ -638,7 +719,7 @@
           `<div class="metric"><strong>${esc(C.number(values[position]))}</strong><span>${text(key)}</span></div>`).join("")}</div>
         ${low ? `<p class="notice warning">${text("reliability.warning")}</p>` : ""}${values.some(value => !Number.isFinite(value)) ?
           `<p class="muted">${text("reliability.needData")}</p>` : ""}
-        <details><summary>${text("results.parameters")}</summary><code>${esc(C.canonical(last.params))}</code></details></article>`;
+        <details><summary>${text("results.parameters")}</summary><code>${esc(C.canonical(last.params))}</code>${processingDeadline(last)}</details></article>`;
     });
     app().innerHTML = `<section class="hero"><h1>${text("reliability.title")}</h1><p>${text("reliability.subtitle")}</p></section>
       ${filterBar(false)}<p class="notice">${text("reliability.deviceNote")}</p><div class="stack">${cards.join("") ||
@@ -878,5 +959,5 @@
     C.Timing.ready = C.Timing.measure();
   }
   C.UI = { init, render, home, library, instructions, routineView, results, startPractice, runMain, finish, cooldown,
-    chart, openSettings, openPreferences, updateRunner, applyTheme, syncPreferences };
+    chart, researchCard, openSettings, openPreferences, updateRunner, applyTheme, syncPreferences };
 })();

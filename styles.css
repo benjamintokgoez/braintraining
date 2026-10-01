@@ -1933,6 +1933,41 @@ textarea {
   gap: 16px 32px;
 }
 
+.journey-card .metrics {
+  margin-block: 8px;
+}
+
+.journey-card select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journey-change {
+  border-color: var(--cp-accent);
+}
+
+.journey-change strong {
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+}
+
+.journey-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.research-links {
+  padding-left: 20px;
+}
+
+.research-links li + li {
+  margin-top: 12px;
+}
+
+.research-links a {
+  overflow-wrap: anywhere;
+}
+
 .progress-overview .week-strip {
   flex: 1 1 280px;
   max-width: 420px;
