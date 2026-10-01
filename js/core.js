@@ -453,8 +453,9 @@ window.Cortex = {};
     exclude(trials) {
       const rts = trials.filter(t => Number.isFinite(t.rtMs) && t.rtMs >= 150 && !t.falseStart && !t.unscored).map(t => t.rtMs);
       const center = median(rts);
+      // Slow vigilance lapses are measured outcomes, not removable RT outliers.
       return trials.map(row => ({ ...row, excluded: !!row.forcedExclusion || (row.unscored || row.falseStart ? false :
-        Number.isFinite(row.rtMs) && (row.rtMs < 150 || center !== null && row.rtMs > 3 * center)) }));
+        Number.isFinite(row.rtMs) && (row.rtMs < 150 || row.lapse !== true && center !== null && row.rtMs > 3 * center)) }));
     },
     eligible: trials => trials.filter(t => !t.excluded && !t.unscored && !t.falseStart),
     accuracy(trials) {
@@ -607,7 +608,7 @@ window.Cortex = {};
   C.Tasks = [];
   C.register = task => {
     if (C.Tasks.some(entry => entry.id === task.id)) throw new Error("Duplicate task");
-    C.Tasks.push({ supportsAssessment: true, touchSupport: "full", languageDependent: false,
+    C.Tasks.push({ supportsAssessment: true, touchSupport: "full", languageDependent: false, protocolVersion: 2,
       landscape: false, staircase: "stepwise", ...task });
   };
   C.parameter = {

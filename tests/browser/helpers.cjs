@@ -90,7 +90,8 @@ async function playPhase(page, phase) {
       return { input: ctx.input, controls: values.map(value => {
         const index = current.options.findIndex(option => option.value === value);
         if (index < 0 && !current.anywhere) throw new Error(`Missing control for ${String(value)}`);
-        return { index, key: current.options[index]?.key || "Space" };
+        const key = current.options[index]?.key || "Space";
+        return { index: current.anywhere && !current.zones.length ? -1 : index, key: key === "space" ? "Space" : key };
       }) };
     }, phase);
     if (action.finished) return;
@@ -98,8 +99,11 @@ async function playPhase(page, phase) {
     else {
       for (const control of action.controls) {
         if (action.input === "keyboard") await page.keyboard.press(control.key);
-        else if (control.index < 0) await page.locator("#stage").tap({ force: true });
-        else await page.locator("#response-controls button").nth(control.index).tap({ force: true });
+        else {
+          const target = control.index < 0 ? page.locator("#stage") : page.locator("#response-controls button").nth(control.index);
+          if (action.input === "mouse") await target.click({ force: true });
+          else await target.tap({ force: true });
+        }
       }
       await page.clock.runFor(32);
     }

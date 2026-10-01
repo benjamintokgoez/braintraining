@@ -458,7 +458,7 @@
           C.Audio.stimulusSet : "visual"),
         mobileLimitations: ctx.deviceClass !== "desktop" && ctx.task.touchSupport === "degraded" ? [`mobile.${ctx.task.id}`] : [],
         minimumRefreshHz: ctx.minimumRefreshHz ?? ctx.refreshHz,
-        processingDeadlineMs: ctx.extra?.processingDeadlineMs ?? null, protocolVersion: 2,
+        processingDeadlineMs: ctx.extra?.processingDeadlineMs ?? null, protocolVersion: ctx.task.protocolVersion,
         ...(ctx.routineId ? { routineId: ctx.routineId, routineStep: ctx.routineStep } : {})
       };
       const nextSettings = settings();

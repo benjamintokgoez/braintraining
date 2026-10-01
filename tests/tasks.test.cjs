@@ -55,7 +55,7 @@ test("PVT records waiting-period false starts without reducing the eight actual 
   await ctx.close();
 });
 
-test("arithmetic generates only used items and increases the current operand magnitude", async () => {
+test("arithmetic generates only used items and adapts magnitude within its training ceiling", async () => {
   const f = fixture(), task = f.C.Tasks.find(entry => entry.id === "mental-arithmetic");
   const ctx = f.runner("training", "keyboard", task, { ...task.params, durationSeconds: 30 });
   let scenes = 0;
@@ -65,6 +65,7 @@ test("arithmetic generates only used items and increases the current operand mag
   assert.ok(ctx.trials.length > 5);
   assert.equal(scenes, ctx.trials.length, "No hundreds-item raster bank");
   assert.ok(ctx.trials.at(-1).magnitude > ctx.trials[0].magnitude);
+  assert.ok(ctx.trials.every(row => row.magnitude <= ctx.params.operandCeiling));
   await ctx.close();
 });
 

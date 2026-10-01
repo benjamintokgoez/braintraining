@@ -687,8 +687,9 @@
       return trial;
     }
     state(variant, type, config) {
+      const protocol = this.task.protocolVersion === 2 ? "" : `|protocol-${this.task.protocolVersion}`;
       const key = C.Adaptive.key(this.task.id, this.deviceClass, this.input, this.language,
-        `${C.canonical(this.params)}|${variant}`);
+        `${C.canonical(this.params)}|${variant}${protocol}`);
       if (!this.states.has(key)) this.states.set(key, { key, state: this.mode === "assessment" || this.phase === "practice" ?
         C.Adaptive.create(type, config) : C.Adaptive.load(key, type, config) });
       return this.states.get(key);

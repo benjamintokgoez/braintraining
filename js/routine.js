@@ -20,7 +20,7 @@
   const isDone = routine => routine.steps.every(step => step.sessionId || step.skipped);
   const practiceKey = (task, params, mode = "training") => C.canonical({
     task: task.id, params, mode, device: C.device(), input: C.input,
-    language: task.languageDependent ? C.language : "neutral", protocol: 2
+    language: task.languageDependent ? C.language : "neutral", protocol: task.protocolVersion
   });
   const matchEvidence = (task, params, rows) => task.id !== "dual-nback" ||
     (params.variant === "audio" || rows.some(row => row.positionTarget && row.response?.includes(0))) &&
@@ -28,9 +28,15 @@
   const current = () => {
     const routine = C.Storage.getRoutine();
     if (!routine || routine.date !== C.today()) return null;
-    if (routine.steps.some(step => !taskById(step.taskId) || C.parameterError(taskById(step.taskId), step.params))) {
-      C.notice?.("routine.invalid");
-      return null;
+    for (const step of routine.steps) {
+      const task = taskById(step.taskId);
+      if (task?.id === "mental-arithmetic" && step.params.operandCeiling === undefined) {
+        step.params.operandCeiling = task.params.operandCeiling;
+      }
+      if (!task || C.parameterError(task, step.params)) {
+        C.notice?.("routine.invalid");
+        return null;
+      }
     }
     return routine;
   };
@@ -91,7 +97,7 @@
       const ready = C.Storage.getSettings().practiceReady[practiceKey(task, params, mode)];
       if (C.validTimestamp(ready)) return true;
       return C.Storage.getSessions(task.id, { mode: "training", deviceClass: C.device(), inputMethod: C.input })
-        .some(session => C.completedRound(session) && session.protocolVersion === 2 &&
+        .some(session => C.completedRound(session) && session.protocolVersion === task.protocolVersion &&
           session.practiceCount >= 8 && session.score.accuracy >= .6 &&
           (!task.languageDependent || session.language === C.language) && C.canonical(session.params) === C.canonical(params) &&
           matchEvidence(task, params, task.id === "dual-nback" ?

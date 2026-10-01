@@ -180,18 +180,17 @@
   for (const id of ["stroop-squared", "flanker-squared", "simon-squared"]) {
     C.define(id, "attention", { durationSeconds: p(90, 90, 90), deadlineMs: p(1000, 300, 3000, 50),
       blocks: p(id === "stroop-squared" ? 2 : 1, 1, 4) }, {
-      languageDependent: id === "stroop-squared", staircase: "deadline", primaryMetric: "correctPer90",
+      languageDependent: id === "stroop-squared", staircase: "deadline", primaryMetric: "correctPer90", protocolVersion: 3,
       async run(ctx) {
         const practice = ctx.phase === "practice", q = ctx.params;
         const state = ctx.state("deadline", "deadline", { start: q.deadlineMs, min: 300, max: 3000 });
         const ink = ["stim-red","stim-green","stim-blue","stim-yellow"];
         const keys = ["a","l"];
-        const blocks = practice ? 1 : q.blocks;
+        const blocks = practice ? id === "stroop-squared" && q.blocks > 1 ? 2 : 1 : q.blocks;
         for (let block = 0; block < blocks; block++) {
           const rule = block % 2 === 0 ? "word" : "ink";
-          const count = practice ? 8 : 610;
           const cache = new Map();
-          const items = Array.from({ length: count }, (_, i) => {
+          const makeItem = i => {
             const congruent = i % 2 === 0;
             let target, alternate, scene, labels, signature;
             if (id === "stroop-squared") {
@@ -224,14 +223,15 @@
             const panelKey = `panel:${optionLabels.join("|")}`;
             if (!cache.has(panelKey)) cache.set(panelKey, ctx.prepareOptions(D.options(optionLabels, keys)));
             return { scene, panel: cache.get(panelKey), answer, congruent, rule };
-          });
+          };
           const instruction = D.text(C.t(id === "stroop-squared" ? `response.${rule}` : "response.choose"), 30);
           await ctx.show(instruction, 1500);
           await ctx.countdown();
           const start = C.now(), recent = [];
-          for (const item of items) {
+          for (let index = 0; !practice || index < 8 / blocks; index++) {
             const remaining = practice ? Infinity : 90000 - (C.now() - start);
             if (remaining <= 0) break;
+            const item = makeItem(index);
             const fullDeadline = practice || ctx.mode === "assessment" ? q.deadlineMs : state.state.value;
             const deadline = Math.min(fullDeadline, remaining);
             const row = await ctx.trial({ ...item, deadline, fullDeadline, noFeedback: true,

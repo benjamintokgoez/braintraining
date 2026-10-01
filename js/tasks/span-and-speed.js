@@ -131,16 +131,18 @@
   }
 
   C.define("mental-arithmetic", "reasoning", { minOperand: p(1, 0, 100), maxOperand: p(20, 2, 1000),
+    operandCeiling: p(1000, 2, 1000),
     operations: choice(["mixed","add","subtract","multiply","divide"]), chained: choice(["yes","no"]),
     percentages: choice(["yes","no"]), durationSeconds: p(90, 30, 300, 10), deadlineMs: p(10000, 2000, 30000, 500) }, {
-    primaryMetric: "correctPerMinute", staircase: "deadline",
+    primaryMetric: "correctPerMinute", staircase: "deadline", protocolVersion: 3,
+    validateParams: q => q.maxOperand > q.operandCeiling ? "settings.rangeError" : null,
     async run(ctx) {
       const q = ctx.params, practice = ctx.phase === "practice", panel = C.keypad(ctx);
-      const magnitude = ctx.state("magnitude", "stepwise", { start: q.maxOperand, min: Math.max(2, q.minOperand), max: 1000 });
+      const magnitude = ctx.state("magnitude", "stepwise", { start: q.maxOperand, min: Math.max(2, q.minOperand), max: q.operandCeiling });
       const deadlineState = ctx.state("deadline", "deadline", { start: q.deadlineMs, min: 2000, max: 30000 });
       const makeItem = limit => {
-        const a = C.rand(Math.min(q.minOperand, limit), limit), b = C.rand(1, Math.max(2, limit));
         const op = q.operations === "mixed" ? C.pick(["add","subtract","multiply","divide"]) : q.operations;
+        const a = C.rand(q.minOperand, limit), b = C.rand(op === "divide" ? Math.max(1, q.minOperand) : q.minOperand, limit);
         let expression, answer;
         if (q.percentages === "yes" && Math.random() < .2) {
           const percent = C.pick([5,10,15,20,25,50,75]);
@@ -149,9 +151,14 @@
           if (op === "add") { answer = a + b; expression = `${C.number(a)} + ${C.number(b)}`; }
           if (op === "subtract") { answer = a - b; expression = `${C.number(a)} − ${C.number(b)}`; }
           if (op === "multiply") { answer = a * b; expression = `${C.number(a)} × ${C.number(b)}`; }
-          if (op === "divide") { answer = a; expression = `${C.number(a * b)} ÷ ${C.number(b)}`; }
+          if (op === "divide") {
+            const nontrivial = Math.max(2, q.minOperand) <= Math.floor(limit / 2);
+            const divisor = nontrivial ? C.rand(Math.max(2, q.minOperand), Math.floor(limit / 2)) : b;
+            answer = C.rand(nontrivial ? 2 : Math.ceil(q.minOperand / divisor), Math.floor(limit / divisor));
+            expression = `${C.number(answer * divisor)} ÷ ${C.number(divisor)}`;
+          }
           if (q.chained === "yes" && Math.random() < .35) {
-            const next = C.rand(1, Math.max(2, limit));
+            const next = C.rand(q.minOperand, limit);
             expression = `(${expression}) + ${C.number(next)}`; answer += next;
           }
         }
@@ -188,7 +195,7 @@
 
   C.define("pvt-b", "vigilance", { durationSeconds: p(180, 180, 180), minIsiMs: p(1000, 1000, 4000, 100),
     maxIsiMs: p(4000, 1000, 8000, 100), lapseMs: p(355, 355, 355), responseMs: p(10000, 2000, 10000, 500) }, {
-    touchSupport: "degraded", primaryMetric: "meanReciprocalRT", staircase: "deadline",
+    touchSupport: "degraded", primaryMetric: "meanReciprocalRT", staircase: "deadline", protocolVersion: 3,
     async run(ctx) {
       const q = ctx.params, practice = ctx.phase === "practice";
       const isis = Array.from({ length: practice ? 8 : 181 }, () => C.rand(q.minIsiMs, Math.max(q.minIsiMs, q.maxIsiMs)));

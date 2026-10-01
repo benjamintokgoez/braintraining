@@ -319,7 +319,8 @@
             trial.goOmission = !item.stopTrial && !isFiniteNumber(trial.rtMs);
           }
         });
-        if (item.stopTrial && !practice && ctx.mode === "training" && !(isFiniteNumber(row.rtMs) && row.rtMs < 150)) {
+        if (item.stopTrial && !practice && ctx.mode === "training" && !row.forcedExclusion &&
+          !(isFiniteNumber(row.rtMs) && row.rtMs < 150)) {
           ctx.adapt(state, { correct: row.stopSuccess });
         }
         if (q.itiMs > 0) await ctx.show(ctx.blank, q.itiMs);
