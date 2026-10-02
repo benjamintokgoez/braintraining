@@ -832,22 +832,51 @@ legend {
   padding: 0;
 }
 
-.weekday-grid {
+.weekday-grid,
+.interest-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 8px;
 }
 
-.weekday-grid label {
+.weekday-grid label,
+.interest-grid label {
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--cp-border);
   border-radius: 0.625rem;
   background: var(--cp-bg-elevated);
 }
 
-.weekday-grid label:has(input:checked) {
+.weekday-grid label:has(input:checked),
+.interest-grid label:has(input:checked) {
   border-color: var(--cp-accent);
   background: var(--cp-selected-bg);
+}
+
+.daily-reading {
+  margin-top: 24px;
+}
+
+.daily-reading .section-heading {
+  flex-wrap: wrap;
+}
+
+.daily-reading .section-heading > div,
+.daily-reading h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reading-text {
+  max-width: 76ch;
+  font-size: 1rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.reading-attribution {
+  overflow-wrap: anywhere;
 }
 
 .routine-schedule p {
@@ -1262,6 +1291,15 @@ body.running {
 
 #response-status:empty {
   display: none;
+}
+
+#response-status.tower-plan,
+#response-status.palace-status {
+  max-height: 84px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 #abort {

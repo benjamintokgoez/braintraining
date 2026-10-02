@@ -355,7 +355,8 @@
         this.controlButtons = panel.zones.map(zone => {
           const button = document.createElement("button");
           button.type = "button"; button.className = "response-control";
-          button.setAttribute("aria-label", this.input === "keyboard" ? `${zone.label} (${zone.key.toUpperCase()})` : zone.label);
+          const label = zone.ariaLabel || zone.label;
+          button.setAttribute("aria-label", this.input === "keyboard" ? `${label} (${zone.key.toUpperCase()})` : label);
           button.addEventListener("click", event => { if (event.detail === 0) this.respond(zone.value, "keyboard"); });
           return button;
         });
@@ -396,16 +397,19 @@
     check() { if (this.signal.aborted) throw new DOMException("Aborted", "AbortError"); }
     prepareOptions(options, layout = "standard") {
       const w = this.w, h = this.h, margin = Math.max(12, this.safeSide + 8), gap = 8;
-      let cols = Math.min(options.length, 4);
+      const count = layout === "palace" ? 11 : options.length;
+      let cols = Math.min(count, 4);
       if (w >= 600 && w > h && !["matches", "grid"].includes(layout)) {
-        cols = Math.min(options.length, Math.max(4, Math.floor((w - margin * 2 + gap) / (layout === "words" ? 144 : 88))));
+        cols = Math.min(count, Math.max(4, Math.floor((w - margin * 2 + gap) / (layout === "words" ? 144 : 88))));
       }
       if (layout === "matches") cols = Math.min(2, options.length);
+      if (layout === "tower-plan" && w < 600) cols = 3;
       if (layout === "words" && w < 600 && h >= w) {
         // Longer labels get more horizontal space without shrinking hit targets.
         cols = options.length <= 8 ? 2 : 3;
       }
-      let rows = Math.ceil(options.length / cols);
+      if (layout === "palace" && w < 600 && h >= w) cols = 3;
+      let rows = Math.ceil(count / cols);
       const available = Math.min(h * (layout === "words" ? .6 : .41), rows * (["pictures", "matches"].includes(layout) ? 96 : 60) + gap * (rows - 1));
       const cellH = Math.max(48, (available - gap * (rows - 1)) / rows);
       const cellW = Math.min(layout === "grid" ? cellH : layout === "matches" ? 260 : 180,
@@ -418,7 +422,11 @@
       const g = canvas.getContext("2d");
       g.textAlign = "center"; g.textBaseline = "middle";
       const zones = options.map((option, i) => {
-        let x = left + (i % cols) * (cellW + gap), y = top + Math.floor(i / cols) * (cellH + gap);
+        const slot = layout === "palace" && i >= options.length - 5 ? 6 + i - (options.length - 5) : i;
+        let x = left + (slot % cols) * (cellW + gap), y = top + Math.floor(slot / cols) * (cellH + gap);
+        if (layout === "tower-plan" && i >= options.length - options.length % cols) {
+          x += (cols - options.length % cols) * (cellW + gap) / 2;
+        }
         if (layout === "radial") {
           const centerY = (Math.max(72, this.safeTop + 64) + h - bottomMargin) / 2;
           const radius = Math.min(w / 2 - margin - 36, (h - bottomMargin - Math.max(72, this.safeTop + 64)) / 2 - 28);
@@ -451,7 +459,16 @@
           `${zone.key.toUpperCase()}  ${zone.label}` : zone.label;
         const size = pictureLabel ? 13 : Math.max(14, Math.min(18, (zone.w - 10) / (label.length * .52)));
         g.font = `500 ${size}px ${font}`;
-        g.fillText(label, zone.x + zone.w / 2, y + (pictureLabel ? zone.h - 11 : zone.h / 2), zone.w - 10);
+        if (layout === "palace") {
+          const lines = [""];
+          for (const word of label.split(" ")) {
+            const last = lines.length - 1, next = [lines[last], word].filter(Boolean).join(" ");
+            if (lines[last] && g.measureText(next).width > zone.w - 10 && lines.length < 3) lines.push(word);
+            else lines[last] = next;
+          }
+          lines.forEach((line, index) => g.fillText(line, zone.x + zone.w / 2,
+            y + zone.h / 2 + (index - (lines.length - 1) / 2) * (size + 2), zone.w - 10));
+        } else g.fillText(label, zone.x + zone.w / 2, y + (pictureLabel ? zone.h - 11 : zone.h / 2), zone.w - 10);
       }
       return { canvas, zones, top: panelTop, options, layout };
     }
@@ -491,7 +508,8 @@
       this.visibleSvg = scene?.svg || null;
       if (this.visibleSvg) this.visibleSvg.style.visibility = "visible";
       if (scene && !scene.svg) {
-        const areaHeight = Math.min(this.stimulusHeight, panel ? panel.top - (panel.layout === "matches" ? 80 : 42) : this.stimulusHeight);
+        const areaHeight = Math.min(this.stimulusHeight,
+          panel ? panel.top - (panel.statusHeight ?? (panel.layout === "matches" ? 80 : 42)) : this.stimulusHeight);
         const topMargin = Math.max(72, this.safeTop + 64);
         const maxH = Math.max(20, areaHeight - topMargin - 12);
         const scale = Math.min(1, (this.w - 24) / scene.width, maxH / scene.height);
@@ -554,7 +572,7 @@
       if (method !== this.input) { this.invalidate("runner.inputChanged"); }
       const time = C.now();
       if (current.falseStartPhase) { current.falseStarts.push(time); return; }
-      if (time - current.startedAt >= current.deadline) {
+      if (current.deadline !== null && time - current.startedAt >= current.deadline) {
         current.lateResponses.push({ value, time });
         if (current.panel?.layout === "matches") this.setResponseStatus("runner.inputLate");
         return;
@@ -562,7 +580,9 @@
       if (current.interact) {
         const update = current.interact(value, time, current, current.trial);
         if (!update || typeof update !== "object") throw new TypeError("Interactive response must return a state update");
-        if (update.accepted !== false) current.responses.push({ value: update.recordValue ?? value, time });
+        if (update.accepted !== false) current.responses.push({
+          value: Object.prototype.hasOwnProperty.call(update, "recordValue") ? update.recordValue : value, time
+        });
         if (update.scene) current.scene = update.scene;
         if (update.panel) {
           current.panel = update.panel; current.options = update.panel.options; current.zones = update.panel.zones;
@@ -588,7 +608,13 @@
     }
     async trial(spec) {
       this.check();
-      if (!Number.isFinite(spec.deadline) || spec.deadline <= 0) throw new RangeError("Trial deadline must be positive");
+      if (spec.selfPaced) {
+        if (spec.noRecord !== true || spec.deadline !== undefined || spec.fullDeadline !== undefined ||
+          spec.waitFullWindow || spec.multi || spec.timeline?.length || spec.visibleMs !== undefined || spec.counter) {
+          throw new RangeError("Self-paced phases must be unrecorded and have no deadline or timed events");
+        }
+      } else if (!Number.isFinite(spec.deadline) || spec.deadline <= 0) throw new RangeError("Trial deadline must be positive");
+      const deadline = spec.selfPaced ? null : spec.deadline;
       if (spec.fullDeadline !== undefined && (!Number.isFinite(spec.fullDeadline) || spec.fullDeadline < spec.deadline)) {
         throw new RangeError("Full deadline must include the response window");
       }
@@ -609,7 +635,7 @@
       const current = { options: panel?.options || [], zones: panel?.zones || [], panel,
         responses: [], done: false, multi: spec.multi, sequence: spec.sequence,
         maxLength: spec.maxLength, anywhere: spec.anywhere, scene: spec.scene, falseStarts: [],
-        falseStartPhase: spec.falseStartPhase, lateResponses: [], deadline: spec.deadline,
+        falseStartPhase: spec.falseStartPhase, lateResponses: [], deadline,
         interact: spec.interact, displayResponse: spec.displayResponse, trial,
         responseEnabled: spec.responseEnabled !== false, responseHeading: spec.responseHeading };
       const start = await C.Timing.frame(); this.check();
@@ -643,7 +669,7 @@
       };
       advanceTimeline(start);
       let frame = start, hidden = false;
-      while (frame - start < spec.deadline && (!current.done || spec.multi || spec.waitFullWindow)) {
+      while ((deadline === null || frame - start < deadline) && (!current.done || spec.multi || spec.waitFullWindow)) {
         const previousFrame = frame;
         frame = await C.Timing.frame(); this.check();
         this.frameDuration += frame - previousFrame; this.frameCount++;
@@ -689,7 +715,7 @@
     state(variant, type, config) {
       const protocol = this.task.protocolVersion === 2 ? "" : `|protocol-${this.task.protocolVersion}`;
       const key = C.Adaptive.key(this.task.id, this.deviceClass, this.input, this.language,
-        `${C.canonical(this.params)}|${variant}${protocol}`);
+        `${C.canonical(C.setupParams(this.task, this.params))}|${variant}${protocol}`);
       if (!this.states.has(key)) this.states.set(key, { key, state: this.mode === "assessment" || this.phase === "practice" ?
         C.Adaptive.create(type, config) : C.Adaptive.load(key, type, config) });
       return this.states.get(key);

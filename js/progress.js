@@ -47,7 +47,7 @@
   C.Evidence = { sources, families };
 
   C.seriesKey = (task, session) => C.canonical({
-    params: session.params, device: session.deviceClass, input: session.inputMethod,
+    params: C.setupParams(task, session.params), device: session.deviceClass, input: session.inputMethod,
     language: task.languageDependent ? session.language : "neutral", stimulusSet: session.stimulusSet,
     protocol: session.protocolVersion || 1, orientation: C.layoutOrientation(session.viewport),
     processingDeadlineMs: session.processingDeadlineMs ?? null
@@ -60,7 +60,8 @@
     ["lower", ["centralThreshold", "dividedThreshold", "selectiveThreshold", "ssrt", "meanRT", "meanBrier"]]
   ].flatMap(([direction, metrics]) => metrics.map(metric => [metric, direction])));
   const contextMetrics = ["accuracy", "processingAccuracy", "meanRT", "lapses", "falseStarts", "nLevelMean", "span", "partialCreditLoad",
-    "pairLoadMean", "goAccuracy", "stopResponseRate", "meanExcessMoves", "optimalMoveEfficiency"];
+    "pairLoadMean", "goAccuracy", "stopResponseRate", "meanExcessMoves", "optimalMoveEfficiency",
+    "meanStudySeconds", "studySecondsPerItem"];
   const compare = (a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   const eligible = sessions => {
     // Conflicting backup variants are not independent attempts, including the original they refer to.

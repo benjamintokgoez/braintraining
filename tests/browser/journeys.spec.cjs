@@ -405,6 +405,7 @@ for (const timezoneId of ["Asia/Tokyo", "Pacific/Honolulu"]) test.describe(`loca
 });
 
 test("an installed app shell, exercises, preferences and saved records reopen offline", async ({ page, context, browserName }) => {
+  test.setTimeout(120000);
   const server = createStaticServer();
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -429,7 +430,10 @@ test("an installed app shell, exercises, preferences and saved records reopen of
     // Stopping this test-owned origin verifies the real cached path without that emulation bug.
     if (browserName === "webkit") await stop();
     else await context.setOffline(true);
+    await page.clock.install();
     const response = await page.reload();
+    await page.clock.runFor(600);
+    await page.waitForFunction(() => window.Cortex.Timing.refreshHz >= 50);
     expect(response.fromServiceWorker()).toBe(true);
     await expect(page.locator("#start-routine")).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -445,6 +449,24 @@ test("an installed app shell, exercises, preferences and saved records reopen of
     await page.locator("#close-share").click();
     await open(page, "task/number-series", origin);
     await expect(page.locator("#start-practice")).toBeVisible();
+    await open(page, "task/method-loci", origin);
+    await expect(page.locator("#loci-lesson")).toContainText("Learn the memory-palace technique");
+    await page.locator("#task-settings").click();
+    await page.locator('[name="itemSet"]').selectOption("cards");
+    await page.locator('[name="trials"]').fill("2");
+    await page.locator("#settings-form button[type='submit']").click();
+    await expect(page.locator("#loci-lesson")).toContainText("All 52 standard cards");
+    await page.locator("#start-practice").click();
+    await playPhase(page, "practice");
+    await expect(page.locator("#start-main")).toBeVisible();
+    await page.locator("#start-main").click();
+    await playPhase(page, "block");
+    await expect(page.locator(".completion-card")).toBeVisible();
+    expect(await page.evaluate(() => {
+      const C = window.Cortex, summary = C.Storage.getSessions("method-loci")[0];
+      return { complete: summary.completedMain, valid: !summary.invalid, score: summary.score.partialCreditLoad,
+        catalogue: C.Storage.getTrials(summary.id).find(row => row.phase === "main").choices.length };
+    })).toEqual({ complete: true, valid: true, score: 1, catalogue: 52 });
     await open(page, "results", origin);
     await page.locator("#result-task").selectOption("flanker-squared");
     await expect(page.locator(".history-card tbody tr")).toHaveCount(1);

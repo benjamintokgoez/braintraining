@@ -52,7 +52,7 @@
   const taskById = id => C.Tasks.find(task => task.id === id);
   const isDone = routine => routine.steps.every(step => step.sessionId || step.skipped);
   const practiceKey = (task, params, mode = "training") => C.canonical({
-    task: task.id, params, mode, device: C.device(), input: C.input,
+    task: task.id, params: C.setupParams(task, params), mode, device: C.device(), input: C.input,
     language: task.languageDependent ? C.language : "neutral", protocol: task.protocolVersion
   });
   const matchEvidence = (task, params, rows) => task.id !== "dual-nback" ||
@@ -65,6 +65,13 @@
       const task = taskById(step.taskId);
       if (task?.id === "mental-arithmetic" && step.params.operandCeiling === undefined) {
         step.params.operandCeiling = task.params.operandCeiling;
+      }
+      if (task?.id === "tower-london" && step.params.planningMode === undefined) {
+        step.params.planningMode = task.params.planningMode;
+      }
+      if (task?.id === "method-loci") {
+        for (const key of ["itemSet", "coaching", "publicFigures"]) step.params[key] ??= task.params[key];
+        delete step.params.distractorCount;
       }
       if (!task || C.parameterError(task, step.params)) {
         C.notice?.("routine.invalid");
@@ -150,7 +157,8 @@
       return C.Storage.getSessions(task.id, { mode: "training", deviceClass: C.device(), inputMethod: C.input })
         .some(session => C.completedRound(session) && session.protocolVersion === task.protocolVersion &&
           session.practiceCount >= 8 && session.score.accuracy >= .6 &&
-          (!task.languageDependent || session.language === C.language) && C.canonical(session.params) === C.canonical(params) &&
+          (!task.languageDependent || session.language === C.language) &&
+          C.canonical(C.setupParams(task, session.params)) === C.canonical(C.setupParams(task, params)) &&
           matchEvidence(task, params, task.id === "dual-nback" ?
             C.Stats.eligible(C.Stats.exclude(C.Storage.getTrials(session.id))) : []));
     },
@@ -178,6 +186,8 @@
       if (task.id === "running-span") return Math.ceil(params.trials * (1000 +
         (params.minStreamLength + params.maxStreamLength) / 2 * params.presentationMs +
         Math.min(params.recallMs, ((params.recallLength + params.maxRecall) / 2 + 1) * 600) + 250) / 60000);
+      if (task.id === "method-loci") return Math.max(1, Math.ceil(params.trials *
+        ((params.loci + params.maxLoci) / 2 * 10000 + Math.min(params.recallMs, params.maxLoci * 3000) + 800) / 60000));
       const count = params.trials || params.trialsPerBlock * params.blocks || 1;
       const seconds = (params.responseMs || params.recallMs || 3000) / 1000 * .6 +
         (params.studyMs || params.cueTargetIntervalMs || params.retentionMs || 500) / 1000;

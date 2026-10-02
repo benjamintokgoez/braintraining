@@ -63,7 +63,12 @@
     <circle class="orbit-node" cx="160" cy="268" r="5"/>
   </svg>`;
   const taskTitle = (task, params) => task.id === "dual-nback" && params ?
-    C.t(`nback.name.${params.variant}`) : C.t(task.nameKey);
+    C.t(`nback.name.${params.variant}`) : task.id === "tower-london" && params?.planningMode === "mental" ?
+      C.t("tower.mental.name") : C.t(task.nameKey);
+  const taskTextKey = (task, params, kind) => task.id === "tower-london" && params.planningMode === "mental" ?
+    `tower.mental.${kind}` : kind === "guide" ?
+      task.id === "dual-nback" ? `guide.nback.${params.variant}` : `guide.${task.id}` :
+      task[kind === "instructions" ? "instructionKey" : "keyMapKey"];
   const taskParams = task => {
     const saved = settings().taskParams[task.id] || {};
     return Object.fromEntries(Object.entries(task.paramSchema).map(([key, schema]) => {
@@ -174,6 +179,38 @@
       <span class="step-meta">${step.sessionId ? text("routine.done") : step.skipped ? text("routine.skipped") :
         text("routine.approxMinutes", { count: C.number(Math.ceil(step.estimatedMinutes), 0) })}</span></li>`;
   }).join("")}</ol>`;
+  async function refreshReading(retry = false) {
+    const content = document.getElementById("daily-reading-content");
+    if (!content || C.active || C.starting || document.hidden) return;
+    const requestKey = C.Reading.key();
+    if (!retry && content.dataset.readingKey === requestKey && content.dataset.readingStatus === "ready") return;
+    const ticket = Symbol("reading");
+    content.readingTicket = ticket;
+    content.dataset.readingKey = requestKey;
+    if (settings().dailyReadingEnabled) content.innerHTML = `<p role="status" class="muted">${text("reading.loading")}</p>`;
+    const result = await C.Reading.load({ retry });
+    if (!content.isConnected || content.readingTicket !== ticket) return;
+    content.dataset.readingStatus = result.status;
+    const record = result.record;
+    const message = result.status === "error" ? result.message : `reading.${result.status}`;
+    const stale = record && record.date !== C.today();
+    content.innerHTML = `${result.status !== "ready" ? `<p role="status" class="${result.status === "error" ? "notice warning" : "muted"}">
+      ${text(message)}</p>` : ""}${record ? `<div class="section-heading"><h3>${esc(record.title)}</h3>
+      <span class="tag">${text(`reading.interest.${record.interest}`)}</span></div>
+      <p class="fine-print">${text(stale ? "reading.cachedDate" : "reading.todayDate", {
+        date: new Intl.DateTimeFormat(C.language, { dateStyle: "medium" }).format(new Date(`${record.date}T12:00:00`))
+      })}</p><p class="reading-text">${esc(record.text)}</p>
+      <p class="fine-print">${text(record.shortened ? "reading.shortened" : "reading.excerpt")}</p>
+      <p class="fine-print reading-attribution"><a id="reading-source" href="${esc(C.Reading.sourceURL(record))}"
+        target="_blank" rel="noopener noreferrer">${text("reading.source")}</a> ·
+      <a href="${esc(C.Reading.historyURL(record))}" target="_blank" rel="noopener noreferrer">${text("reading.contributors")}</a> ·
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>
+      <p class="fine-print">${text("reading.context")}</p>
+      ${result.saved === false ? `<p class="notice warning">${text("reading.unsaved")}</p>` : ""}` : ""}
+      ${["error", "offline", "paused"].includes(result.status) ? `<button id="reading-retry" class="secondary" type="button">
+        ${text("reading.retry")}</button>` : ""}`;
+    document.getElementById("reading-retry")?.addEventListener("click", () => { void refreshReading(true); });
+  }
   function home() {
     const sessions = C.Storage.getSessions(), activity = weeklyActivity(sessions), routine = C.Routine.preview();
     const saved = C.Routine.current(), done = saved && C.Routine.isDone(saved);
@@ -203,9 +240,18 @@
         `<span data-domain="${domain}">${domainIcon(domain)}</span>`).join("")}</div>
       <h3>${text("home.pickTitle")}</h3><p class="muted">${text("home.pickHelp")}</p>
       <a href="#library" class="button secondary">${text("home.explore")}</a></section></aside></div>
+      <section id="daily-reading" class="card daily-reading" aria-labelledby="daily-reading-heading">
+      <div class="section-heading"><div><span class="eyebrow">${text("reading.eyebrow")}</span>
+      <h2 id="daily-reading-heading">${text("reading.title")}</h2></div>
+      <button id="reading-settings" class="secondary" type="button">${text("reading.settings")}</button></div>
+      <div id="daily-reading-content"></div></section>
       <p class="home-perspective">${text("home.perspective")} <a href="#about">${text("home.evidenceLink")}</a></p>`;
-    document.getElementById("start-routine").onclick = () => { C.Routine.start(); location.hash = "routine"; };
+    document.getElementById("start-routine").onclick = () => { C.Reading.cancel(); C.Routine.start(); location.hash = "routine"; };
     document.getElementById("routine-preferences")?.addEventListener("click", openPreferences);
+    document.getElementById("reading-settings").onclick = event => {
+      openPreferences(event); document.getElementById("daily-reading-preferences")?.scrollIntoView({ block: "nearest" });
+    };
+    void refreshReading();
   }
   function taskCard(task, counts) {
     const q = taskParams(task), favorite = settings().favorites.includes(task.id);
@@ -255,6 +301,18 @@
       favoritesOnly = !favoritesOnly; library(); document.getElementById("favorites-only").focus();
     };
   }
+  function lociLesson(params, familiar) {
+    const route = C.Loci.route(params);
+    return `<details id="loci-lesson" ${familiar ? "" : "open"}><summary>${text("loci.lesson.title")}</summary>
+      <div class="stack prose"><ol>${["route", "images", "recall"].map(step =>
+        `<li><strong>${text(`loci.lesson.${step}Title`)}</strong> ${text(`loci.lesson.${step}`)}</li>`).join("")}</ol>
+      <p class="notice">${route.length ? text("loci.lesson.example", { place: route[0] }) : text("loci.lesson.addRoute")}</p>
+      <p>${text(`loci.lesson.${params.itemSet}`)}</p>
+      <details><summary>${text("loci.lesson.yourRoute")}</summary><ol class="loci-route">
+      ${route.slice(0, params.maxLoci).map(place => `<li>${esc(place)}</li>`).join("")}</ol>
+      <p class="fine-print">${text(params.route === "custom" ? "loci.lesson.customRoute" : "loci.lesson.exampleRoute")}</p></details>
+      <p class="fine-print">${text("loci.lesson.limits")}</p></div></details>`;
+  }
   function instructions(task, context = null) {
     selectedTask = task.id;
     if (task.renderView) { task.renderView(app()); return; }
@@ -262,7 +320,7 @@
     const mode = context ? "training" : settings().mode;
     const next = mode === "assessment" ? cooldown(task.id) : null;
     const familiar = C.Routine.canSkipPractice(task, q, mode);
-    const guide = task.id === "dual-nback" ? `guide.nback.${q.variant}` : `guide.${task.id}`;
+    const guide = taskTextKey(task, q, "guide");
     app().innerHTML = `${context ? `<div class="routine-banner"><a href="#home">${text(C.Routine.titleKey())}</a>
       <span>${text("routine.round", { current: C.number(context.index + 1), total: C.number(context.routine.steps.length) })}</span>
       <span>${text("mode.training")}</span></div>` : `<a class="back-link" href="#library">${text("runner.backLibrary")}</a>`}
@@ -271,10 +329,11 @@
       <div class="section-heading"><h2>${text("runner.instructions")}</h2><span class="tag">${text("routine.approxMinutes",
         { count: C.number(C.Routine.estimateMinutes(task, q)) })}</span></div>
       <p class="guide">${text(guide, { n: C.number(q.n), operand: C.number(q.operand) })}</p>
+      ${task.id === "method-loci" ? lociLesson(q, familiar) : ""}
       <div class="input-picker"><span>${text("results.input")}</span><div role="group" aria-label="${text("results.input")}">
       ${["keyboard", "touch", "mouse"].map(method => `<button class="secondary ${method === C.input ? "selected" : ""}" data-input="${method}"
         aria-pressed="${method === C.input}">${text(`input.${method}`)}</button>`).join("")}</div></div>
-      <p class="key-map">${text(C.input === "keyboard" ? task.keyMapKey : `runner.${C.input}`)}</p>
+      <p class="key-map">${text(C.input === "keyboard" ? taskTextKey(task, q, "keys") : `runner.${C.input}`)}</p>
       <p class="muted">${text(familiar ? "runner.familiar" : "runner.practiceIntro")}</p>
       ${mode === "assessment" ? `<p class="notice">${text("runner.noFeedback")}</p>` : ""}
       ${context ? `<p class="fine-print">${text("routine.profileNote")}</p>` : ""}
@@ -282,7 +341,7 @@
         class="secondary">${text("runner.previewAudio")}</button><p id="audio-preview-status" role="status">${text("runner.audioCheckHelp")}</p></div>` : ""}
       ${task.touchSupport === "degraded" && C.device() !== "desktop" ? `<details class="mobile-note"><summary>${text("runner.mobileNote")}</summary>
         <p>${text(`mobile.${task.id}`)}</p></details>` : ""}
-      <details><summary>${text("runner.fullInstructions")}</summary><p class="prose">${text(task.instructionKey, task.instructionVars?.(q))}</p>
+      <details><summary>${text("runner.fullInstructions")}</summary><p class="prose">${text(taskTextKey(task, q, "instructions"), task.instructionVars?.(q))}</p>
       <p class="muted">${text("runner.escape")}</p>${task.id === "dual-nback" && ["dual", "audio"].includes(q.variant) ?
         `<p>${text("runner.audioNote")}</p>` : ""}</details>
       <div class="actions"><button class="primary" id="${familiar ? "start-round" : "start-practice"}" ${next ? "disabled" : ""}>
@@ -393,7 +452,7 @@
       ctx.practiceSkipped = skip;
       if (options.context) { ctx.routineId = options.context.routine.id; ctx.routineStep = options.context.index; }
       document.getElementById("runner-description").textContent =
-        `${C.t(task.instructionKey, task.instructionVars?.(q))} ${C.t(task.keyMapKey)}`;
+        `${C.t(taskTextKey(task, q, "instructions"), task.instructionVars?.(q))} ${C.t(taskTextKey(task, q, "keys"))}`;
       updateRunner(ctx);
       C.starting = false;
       if (skip) { await runMain(ctx); return; }
@@ -816,6 +875,7 @@
     app().innerHTML = `<section class="hero"><h1>${text("about.title")}</h1><p>${text("app.localOnly")}</p></section>
       <section class="card prose">${["purpose", "evidence", "design", "ufov", "measurement", "modes", "reliability", "devices", "limitations", "privacy", "tierTwo"].map(key =>
         `<h2>${text(`about.${key}`)}</h2><p>${text(`about.${key}Text`)}</p>`).join("")}
+      <h2>${text("reading.title")}</h2><p>${text("reading.privacy")}</p>
       <h2>${text("about.designSources")}</h2><ul>
       <li><a href="https://doi.org/10.3389/fpsyg.2015.00368">Elliot (2015): Color and psychological functioning</a></li>
       <li><a href="https://doi.org/10.3389/fpsyg.2016.00784">Xia et al. (2016): Exploring the effect of red and blue on cognitive task performances</a></li>
@@ -847,6 +907,14 @@
       <label class="field">${text("preferences.warmup")}<select name="warmupPolicy">${["familiar", "always"].map(policy =>
         `<option value="${policy}" ${value.warmupPolicy === policy ? "selected" : ""}>${text(`preferences.warmup.${policy}`)}</option>`).join("")}</select></label>
       <p class="fine-print">${text("preferences.protocolNote")}</p></fieldset>
+      <fieldset id="daily-reading-preferences" class="stack"><legend>${text("reading.title")}</legend>
+      <label class="inline"><input name="dailyReadingEnabled" type="checkbox" ${value.dailyReadingEnabled ? "checked" : ""}
+        aria-describedby="reading-privacy">${text("reading.enable")}</label>
+      <p id="reading-privacy" class="fine-print">${text("reading.privacy")}</p>
+      <fieldset class="stack"><legend>${text("reading.interests")}</legend><div class="interest-grid">
+      ${C.readingInterests.map(interest => `<label><input name="dailyReadingInterests" type="checkbox" value="${interest}"
+        ${value.dailyReadingInterests.includes(interest) ? "checked" : ""}>${text(`reading.interest.${interest}`)}</label>`).join("")}
+      </div></fieldset><p class="fine-print">${text("reading.settingsHelp")}</p></fieldset>
       <details id="practice-reminders"><summary>${text("preferences.reminders")}</summary><div class="stack">
       <label><input name="routineReminders" type="checkbox" ${value.routineReminders ? "checked" : ""}
         aria-describedby="reminder-help reminder-support">${text("reminders.title")}</label>
@@ -936,7 +1004,9 @@
       if (!form.reportValidity()) return;
       const next = { ...scheduleValues(), ...Object.fromEntries(["language", "theme", "colorTheme", "warmupPolicy", "inputMethod"]
         .map(key => [key, form.elements.namedItem(key).value])) };
-      const validation = C.appearanceError(next) || C.practiceScheduleError(next);
+      next.dailyReadingEnabled = form.elements.namedItem("dailyReadingEnabled").checked;
+      next.dailyReadingInterests = [...form.querySelectorAll('[name="dailyReadingInterests"]:checked')].map(input => input.value);
+      const validation = C.appearanceError(next) || C.practiceScheduleError(next) || C.readingPreferencesError(next);
       if (validation) { showError(validation); return; }
       if (next.routineReminders && C.Reminders.status() !== "granted") { showError("reminders.permissionRequired"); return; }
       next.fullscreen = form.elements.namedItem("fullscreen").checked; next.vibration = form.elements.namedItem("vibration").checked;
@@ -1001,13 +1071,14 @@
     form.dataset.dirty = "false";
     form.innerHTML = `<p class="muted">${text("settings.seriesBreak")}</p><label class="field">${text("settings.task")}
       ${taskSelect("settings-task", task.id, true)}</label><div class="settings-grid">${Object.entries(task.paramSchema).map(([key, schema]) =>
-      `<label class="field parameter">${text(`param.${key}`)}${schema.type === "text" ?
+      `<label class="field parameter">${text(schema.labelKey || `param.${key}`)}${schema.type === "text" ?
         `<textarea name="${key}" rows="${schema.rows || 3}" maxlength="${schema.maxLength}">${esc(values[key])}</textarea>` :
         schema.choices ? `<select name="${key}">${schema.choices.map(value =>
           `<option value="${value}" ${values[key] === value ? "selected" : ""}>${text(`choice.${value}`)}</option>`).join("")}</select>` :
           `<input name="${key}" type="number" value="${values[key]}" min="${schema.min}" max="${schema.max}" step="${schema.step}" required>`}
       <small>${text("settings.defaults", { value: schema.type === "text" ? schema.value || C.t("common.none") :
         schema.choices ? C.t(`choice.${schema.value}`) : C.number(schema.value) })}</small></label>`).join("")}</div>
+      ${task.id === "method-loci" ? `<p class="fine-print">${text("loci.settingsHelp")}</p>` : ""}
       <p id="settings-error" class="notice warning" role="alert" tabindex="-1" hidden></p><div class="actions">
       <button class="primary" type="submit">${text("common.save")}</button><button id="reset-params" type="button" class="secondary">${text("settings.reset")}</button></div>`;
     document.getElementById("settings-task").onchange = event => {
@@ -1015,9 +1086,20 @@
       openSettings(event.target.value);
       document.getElementById("settings-task").focus();
     };
-    form.oninput = () => { form.dataset.dirty = "true"; document.getElementById("settings-error").hidden = true; };
+    const updateLociFields = () => {
+      if (task.id !== "method-loci") return;
+      const people = form.querySelector('[name="publicFigures"]')?.closest("label");
+      const places = form.querySelector('[name="customLoci"]')?.closest("label");
+      if (people) people.hidden = form.querySelector('[name="itemSet"]').value !== "people";
+      if (places) places.hidden = form.querySelector('[name="route"]').value !== "custom";
+    };
+    updateLociFields();
+    form.oninput = () => {
+      form.dataset.dirty = "true"; document.getElementById("settings-error").hidden = true; updateLociFields();
+    };
     document.getElementById("reset-params").onclick = () => {
       for (const [key, schema] of Object.entries(task.paramSchema)) form.elements.namedItem(key).value = schema.value;
+      updateLociFields();
       form.dataset.dirty = "true"; document.getElementById("settings-error").hidden = true;
     };
     form.onsubmit = event => {
@@ -1046,6 +1128,7 @@
     applyTheme();
     header();
     const [route, ...parts] = (location.hash.slice(1) || "home").split("/");
+    if (route !== "home") C.Reading.cancel();
     let id;
     try { id = decodeURIComponent(parts.join("/")); }
     catch (error) { console.warn("Route could not be decoded:", error); notFound(); if (focus) app().focus(); return; }
@@ -1117,6 +1200,15 @@
     render();
     C.Timing.ready = C.Timing.measure();
     C.Reminders.init();
+    let readingDate = C.today();
+    setInterval(() => {
+      if (readingDate !== C.today()) { readingDate = C.today(); void refreshReading(); }
+    }, 60000);
+    addEventListener("online", () => { void refreshReading(true); });
+    addEventListener("visibilitychange", () => {
+      if (document.hidden) C.Reading.cancel();
+      else void refreshReading();
+    });
   }
   C.UI = { init, render, home, library, instructions, routineView, results, startPractice, runMain, finish, cooldown,
     chart, researchCard, openSettings, openPreferences, openShare, shareData, updateRunner, applyTheme, syncPreferences };

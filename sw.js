@@ -1,11 +1,11 @@
 "use strict";
 
 const CACHE_PREFIX = `cortex-shell-${self.registration.scope}-`;
-const CACHE = `${CACHE_PREFIX}v11`;
+const CACHE = `${CACHE_PREFIX}v15`;
 const ASSETS = [
   "./", "index.html", "styles.css", "i18n.js", "app.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png",
-  "js/core.js", "js/generators.js", "js/runner.js", "js/routine.js", "js/pwa.js", "js/reminders.js", "js/ui.js", "js/progress.js",
+  "js/core.js", "js/generators.js", "js/runner.js", "js/routine.js", "js/pwa.js", "js/reminders.js", "js/reading.js", "js/ui.js", "js/progress.js",
   "js/forecasting.js", "js/tasks/span-and-speed.js", "js/tasks/focus.js", "js/tasks/reasoning.js",
   "js/tasks/learning.js", "js/tasks/inhibition.js", "js/tasks/spatial.js"
 ];

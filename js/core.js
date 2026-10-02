@@ -74,14 +74,39 @@ window.Cortex = {};
     return value.routineReminders === true && (time === "" || days?.length === 0) ?
       "preferences.reminderScheduleRequired" : null;
   };
+  C.readingInterests = Object.freeze(["science", "technology", "politics", "celebrities", "history",
+    "nature", "space", "arts", "geography", "sports"]);
+  C.readingLimits = Object.freeze({ words: 180, characters: 1400, titleWords: 20, titleCharacters: 160 });
+  C.wordCount = text => text.trim().split(/\s+/u).filter(Boolean).length;
+  C.readingPreferencesError = value => {
+    if (!validObject(value) || value.dailyReadingEnabled !== undefined && typeof value.dailyReadingEnabled !== "boolean" ||
+      value.dailyReadingInterests !== undefined && (!Array.isArray(value.dailyReadingInterests) ||
+        value.dailyReadingInterests.length > C.readingInterests.length ||
+        new Set(value.dailyReadingInterests).size !== value.dailyReadingInterests.length ||
+        value.dailyReadingInterests.some(interest => !C.readingInterests.includes(interest)))) return "reading.invalidPreferences";
+    return value.dailyReadingEnabled === true && value.dailyReadingInterests?.length === 0 ? "reading.chooseInterest" : null;
+  };
+  C.readingRecordError = record => {
+    if (record === null || record === undefined) return null;
+    return !validObject(record) || !C.validDate(record.date) || !["en", "de"].includes(record.language) ||
+      !C.readingInterests.includes(record.interest) ||
+      !Number.isSafeInteger(record.pageId) || record.pageId <= 0 ||
+      !Number.isSafeInteger(record.revisionId) || record.revisionId <= 0 ||
+      typeof record.title !== "string" || !record.title.trim() || record.title.length > C.readingLimits.titleCharacters ||
+      C.wordCount(record.title) > C.readingLimits.titleWords ||
+      typeof record.text !== "string" || C.wordCount(record.text) < 25 ||
+      record.text.length > C.readingLimits.characters || C.wordCount(record.text) > C.readingLimits.words ||
+      typeof record.shortened !== "boolean" ? "data.invalid" : null;
+  };
 
   const empty = () => ({
     schemaVersion: 1,
     settings: { language: navigator.language.toLowerCase().startsWith("de") ? "de" : "en",
       mode: "training", vibration: false, fullscreen: false, theme: "system", colorTheme: "graphite", routineMinutes: 10,
       routineTime: "08:00", routineDays: [1, 2, 3, 4, 5, 6, 0], routineReminders: false, reminderLastDate: null,
+      dailyReadingEnabled: false, dailyReadingInterests: ["science", "technology", "history", "nature"],
       warmupPolicy: "familiar", inputMethod: "auto", favorites: [], practiceReady: {}, taskParams: {}, staircases: {}, notices: {} },
-    sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null
+    sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null, dailyReading: null
   });
   let root = empty();
   let storageWarning = null;
@@ -154,6 +179,7 @@ window.Cortex = {};
       preferences.fullscreen !== undefined && typeof preferences.fullscreen !== "boolean" ||
       C.appearanceError(preferences) ||
       C.practiceScheduleError(preferences) ||
+      C.readingPreferencesError(preferences) || C.readingRecordError(value.dailyReading) ||
       preferences.warmupPolicy !== undefined && !["familiar", "always"].includes(preferences.warmupPolicy) ||
       preferences.inputMethod !== undefined && !["auto", "keyboard", "touch", "mouse"].includes(preferences.inputMethod) ||
       preferences.favorites !== undefined && (!Array.isArray(preferences.favorites) ||
@@ -196,7 +222,8 @@ window.Cortex = {};
       if (forecastIds.has(entry.id)) throw new Error("forecast.invalid");
       forecastIds.add(entry.id);
     }
-    return sanitize({ ...value, forecasts: value.forecasts || [], routine: validateRoutine(value.routine, ids) });
+    return sanitize({ ...value, forecasts: value.forecasts || [], routine: validateRoutine(value.routine, ids),
+      dailyReading: value.dailyReading || null });
   };
   const pruneExpired = () => {
     const cutoff = performance.timeOrigin + C.now() - 90 * 86400000;
@@ -249,9 +276,17 @@ window.Cortex = {};
     setSettings(settings) {
       if (!validObject(settings)) throw new Error("preferences.scheduleInvalid");
       const next = { ...root.settings, ...sanitize(C.clone(settings)) };
-      const error = C.appearanceError(next) || C.practiceScheduleError(next);
+      const error = C.appearanceError(next) || C.practiceScheduleError(next) || C.readingPreferencesError(next);
       if (error) throw new Error(error);
       root.settings = next;
+      C.Reading?.sync();
+      return persist();
+    },
+    getDailyReading: () => C.clone(root.dailyReading),
+    setDailyReading(record) {
+      const error = C.readingRecordError(record);
+      if (error) throw new Error(error);
+      root.dailyReading = record ? C.clone(record) : null;
       return persist();
     },
     appendSession(summary, rows, options = {}) {
@@ -372,6 +407,7 @@ window.Cortex = {};
       if (fresh) {
         root.settings = { ...empty().settings, ...incoming.settings };
         root.routine = incoming.routine ? C.clone(incoming.routine) : null;
+        root.dailyReading = incoming.dailyReading ? C.clone(incoming.dailyReading) : null;
       }
       else {
         root.settings.staircases = { ...incoming.settings.staircases, ...root.settings.staircases };
@@ -400,6 +436,7 @@ window.Cortex = {};
         forecastConflicts++;
       }
       pruneExpired();
+      C.Reading?.sync();
       return { added, conflicts, forecastsAdded, forecastsUpdated, forecastConflicts, saved: persist(), localSettingsKept: !fresh };
     },
     prune() { root.trials = {}; return persist(); },
@@ -409,6 +446,7 @@ window.Cortex = {};
       corrupt = false;
       unreadableOriginal = null;
       externalChange = false;
+      C.Reading?.cancel();
       return persist();
     }
   };
@@ -420,6 +458,7 @@ window.Cortex = {};
     try {
       const next = event.newValue ? validate(JSON.parse(event.newValue)) : empty();
       root = { ...empty(), ...next, settings: { ...empty().settings, ...next.settings } };
+      C.Reading?.sync();
       C.language = root.settings.language;
       C.UI?.syncPreferences();
       C.UI?.render();
@@ -645,6 +684,8 @@ window.Cortex = {};
     instructionKey: `task.${id}.instructions`, keyMapKey: `task.${id}.keys`,
     paramSchema: schema, params: Object.fromEntries(Object.entries(schema).map(([key, entry]) => [key, entry.value])), ...rest
   });
+  C.setupParams = (task, params) => task.id === "tower-london" && params.planningMode === "visible" ?
+    Object.fromEntries(Object.entries(params).filter(([key]) => key !== "planningMode")) : params;
   C.parameterError = (task, params) => {
     for (const [key, schema] of Object.entries(task.paramSchema)) {
       const value = params[key];

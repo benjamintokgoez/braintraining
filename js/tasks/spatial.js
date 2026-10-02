@@ -1,5 +1,5 @@
 (() => {
-  const C = window.Cortex, D = C.Draw, S = C.Stats, { p } = C.parameter;
+  const C = window.Cortex, D = C.Draw, S = C.Stats, { p, choice } = C.parameter;
   const PRACTICE_TRIALS = 8;
   const IS_FINITE = Number.isFinite;
   const asRows = rows => rows.some(row => row && typeof row === "object" && "excluded" in row) ? rows : S.exclude(rows);
@@ -361,9 +361,15 @@
   const TOWER_BALLS = ["red", "green", "blue"];
   const serializeState = state => state.map(peg => peg.join("")).join("|");
   const parseState = key => key.split("|").map(peg => peg ? peg.split("").map(Number) : []);
+  const towerMoveError = (state, from, to) => {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 2 || to < 0 || to > 2) return "invalid-peg";
+    if (from === to) return "same-peg";
+    if (!state[from]?.length) return "empty-source";
+    if (state[to].length >= TOWER_CAPACITIES[to]) return "illegal-destination";
+    return null;
+  };
   const moveBall = (state, from, to) => {
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || from > 2 || to < 0 || to > 2 ||
-      from === to || !state[from]?.length || state[to].length >= TOWER_CAPACITIES[to]) return null;
+    if (towerMoveError(state, from, to)) return null;
     const next = cloneState(state);
     const ball = next[from].pop();
     next[to].push(ball);
@@ -484,6 +490,44 @@
     };
   }
 
+  function evaluateTowerPlan(start, goal, plan, moveCap) {
+    const startKey = typeof start === "string" ? start : serializeState(start);
+    const goalKey = typeof goal === "string" ? goal : serializeState(goal);
+    if (!towerStateMap.has(startKey) || !towerStateMap.has(goalKey)) throw new RangeError("Unknown Tower state");
+    if (!Array.isArray(plan) || !Number.isInteger(moveCap) || moveCap < 1 || plan.length > moveCap) {
+      throw new RangeError("Tower plan must fit within its move limit");
+    }
+    let state = parseState(startKey);
+    const states = [cloneState(state)], moves = [];
+    let firstInvalid = null;
+    for (let index = 0; index < plan.length; index++) {
+      const { from, to } = plan[index] || {};
+      const type = towerMoveError(state, from - 1, to - 1);
+      if (type) {
+        firstInvalid = { index: index + 1, from, to, type };
+        break;
+      }
+      const move = moveBall(state, from - 1, to - 1);
+      state = move.state;
+      moves.push({ from, to, ball: move.ball, ballColor: move.ballColor });
+      states.push(cloneState(state));
+    }
+    return {
+      solved: plan.length > 0 && !firstInvalid && serializeState(state) === goalKey,
+      finalState: cloneState(state), states, moves, firstInvalid
+    };
+  }
+
+  function drawTowerBall(g, ball, x, y) {
+    g.beginPath();
+    g.fillStyle = D.palette[TOWER_BALLS[ball] === "red" ? "stim-red" : TOWER_BALLS[ball] === "green" ? "stim-green" : "stim-blue"];
+    g.strokeStyle = D.palette["task-fg"];
+    g.lineWidth = 2;
+    g.arc(x, y, 15, 0, Math.PI * 2);
+    g.fill();
+    g.stroke();
+  }
+
   function renderTowerBoard(state, selectedPeg = -1) {
     const width = 320, height = 220;
     const pegX = [70, 160, 250];
@@ -513,20 +557,13 @@
       }
       for (let peg = 0; peg < 3; peg++) {
         state[peg].forEach((ball, index) => {
-          const y = baseY - index * slotGap;
-          g.beginPath();
-          g.fillStyle = D.palette[TOWER_BALLS[ball] === "red" ? "stim-red" : TOWER_BALLS[ball] === "green" ? "stim-green" : "stim-blue"];
-          g.strokeStyle = D.palette["task-fg"];
-          g.lineWidth = 2;
-          g.arc(pegX[peg], y, 15, 0, Math.PI * 2);
-          g.fill();
-          g.stroke();
+          drawTowerBall(g, ball, pegX[peg], baseY - index * slotGap);
         });
       }
     });
   }
 
-  function towerFrameCanvas(moveCap, portrait) {
+  function towerFrameCanvas(moveCap, portrait, currentLabel = "tower.current") {
     return makeCanvas(portrait ? 340 : 700, portrait ? 590 : 300, (g, w, h) => {
       g.fillStyle = D.palette["task-bg"];
       g.fillRect(0, 0, w, h);
@@ -535,7 +572,7 @@
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText(C.t("tower.goal"), portrait ? w / 2 : 175, 22);
-      g.fillText(C.t("tower.current"), portrait ? w / 2 : 525, portrait ? 298 : 22);
+      g.fillText(C.t(currentLabel), portrait ? w / 2 : 525, portrait ? 298 : 22);
       g.font = '500 20px "Segoe UI", Aptos, Calibri, sans-serif';
       g.fillText(C.t("tower.moveLimit", { count: C.number(moveCap, 0) }), w / 2, h - 11);
       g.fillStyle = D.palette["task-panel"];
@@ -571,6 +608,147 @@
       }
       return sceneCache.get(cacheKey);
     };
+  }
+
+  async function replayTowerPlan(ctx, item, evaluation, portrait, boardCache) {
+    const sceneFor = makeTowerSceneFactory(item.goalKey, boardCache,
+      towerFrameCanvas(item.moveCap, portrait, "tower.replay"), portrait);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    await ctx.show(sceneFor(item.initialKey), 350);
+    for (let index = 0; index < evaluation.moves.length; index++) {
+      const move = evaluation.moves[index], before = evaluation.states[index];
+      const nextKey = serializeState(evaluation.states[index + 1]);
+      if (reducedMotion) {
+        await ctx.show(sceneFor(nextKey), 350);
+        continue;
+      }
+      const from = move.from - 1, to = move.to - 1, pegX = [70, 160, 250];
+      const lifted = cloneState(before);
+      lifted[from].pop();
+      const liftedBoard = renderTowerBoard(lifted);
+      const board = makeCanvas(liftedBoard.width, liftedBoard.height, () => {});
+      const g = board.getContext("2d");
+      const points = [[pegX[from], 176 - (before[from].length - 1) * 34],
+        [pegX[from], 40], [pegX[to], 40], [pegX[to], 176 - before[to].length * 34]];
+      const scene = sceneFor(serializeState(before));
+      const start = await C.Timing.frame();
+      ctx.check();
+      let time = start;
+      do {
+        const progress = Math.min(1, (time - start) / 500) * 3;
+        const segment = Math.min(2, Math.floor(progress)), part = progress - segment;
+        const eased = part * part * (3 - 2 * part);
+        const [x, y] = points[segment].map((value, axis) =>
+          value + (points[segment + 1][axis] - value) * eased);
+        g.clearRect(0, 0, board.width, board.height);
+        g.drawImage(liftedBoard, 0, 0);
+        drawTowerBall(g, move.ball, x, y);
+        ctx.paint({ ...scene, layers: [scene.layers[0], scene.layers[1], { ...scene.layers[2], scene: board }] });
+        if (progress === 3) break;
+        time = await C.Timing.frame();
+        ctx.check();
+      } while (true);
+      await ctx.show(sceneFor(nextKey), 100);
+    }
+    await ctx.show(sceneFor(item.goalKey), 650);
+  }
+
+  function towerPlanFeedback(scene, row) {
+    const error = row.invalidAttempts[0];
+    const message = C.t(error ? `tower.error.${error.type}` : row.endReason === "timeout" ? "tower.timeout" : "tower.notSolved",
+      { count: C.number(error?.index), peg: C.number(error?.type === "empty-source" ? error.from : error?.to) });
+    const caption = D.scene((g, w) => {
+      g.font = '600 18px "Segoe UI", Aptos, Calibri, sans-serif';
+      g.fillText(message, w / 2, 28, w - 16);
+    }, scene.width, 56);
+    return { message, scene: { ...scene, height: scene.height + caption.height,
+      layers: [...scene.layers, { scene: caption, x: 0, y: scene.height, width: caption.width, height: caption.height }] } };
+  }
+
+  async function runTowerPlan(ctx, item, panel, practice, portrait, boardCache) {
+    const plan = [], frozenScene = item.sceneFor(item.initialKey);
+    let selectedPeg = -1, evaluation = null, submittedAt = null;
+    const status = ctx.responseStatus;
+    status.classList.add("tower-plan");
+    status.style.bottom = `${ctx.h - panel.top + 12}px`;
+    const showPlan = (hint = null) => {
+      const moves = plan.map((move, index) => `${C.number(index + 1)}: ${move.from} → ${move.to}`);
+      if (selectedPeg !== -1) moves.push(`${C.number(plan.length + 1)}: ${selectedPeg + 1} → ?`);
+      status.textContent = [C.t("tower.plan", { count: C.number(plan.length), limit: C.number(item.moveCap) }),
+        moves.join(" · ") || C.t("tower.planEmpty"), hint ? C.t(hint) : ""].filter(Boolean).join("\n");
+      status.scrollTop = status.scrollHeight;
+    };
+    let row;
+    try {
+      row = await ctx.trial({
+        scene: frozenScene, panel, deadline: ctx.params.responseMs, rtOnSubmit: true, noFeedback: true,
+        onset: () => showPlan(),
+        evaluate: () => Boolean(evaluation?.solved),
+        interact(value, time, current) {
+          let hint = null;
+          if (value === "back") {
+            if (selectedPeg !== -1) selectedPeg = -1;
+            else { plan.pop(); current.responses.pop(); }
+          } else if (value === "done") {
+            if (selectedPeg !== -1) hint = "tower.finishMove";
+            else if (!plan.length) hint = "tower.enterMoves";
+            else {
+              submittedAt = time;
+              evaluation = evaluateTowerPlan(item.initialKey, item.goalKey, plan, item.moveCap);
+              return { accepted: false, done: true, scene: frozenScene };
+            }
+          } else if (plan.length >= item.moveCap) hint = "tower.planFull";
+          else if (selectedPeg === -1) selectedPeg = value;
+          else if (selectedPeg === value) selectedPeg = -1;
+          else {
+            const move = { from: selectedPeg + 1, to: value + 1 };
+            plan.push(move);
+            selectedPeg = -1;
+            showPlan();
+            return { accepted: true, recordValue: { ...move }, scene: frozenScene };
+          }
+          showPlan(hint);
+          return { accepted: false, scene: frozenScene };
+        },
+        meta: {
+          initialState: cloneState(item.initialState), goalState: cloneState(item.goalState),
+          optimalMoves: item.optimalMoves, optimalPath: item.path.map(step => ({ ...step })),
+          moveCap: item.moveCap, condition: item.optimalMoves, planningMode: "mental"
+        },
+        enrich(result) {
+          result.submittedPlan = submittedAt !== null;
+          result.planSubmissionLatencyMs = submittedAt === null ? null : submittedAt - result.responseWindowOnset;
+          result.plannedMoves = plan.map(move => ({ ...move }));
+          result.pendingSourcePeg = selectedPeg === -1 ? null : selectedPeg + 1;
+          result.finalState = cloneState(evaluation?.finalState || item.initialState);
+          result.actualLegalMoves = evaluation?.moves.length || 0;
+          result.moveLog = evaluation?.moves.map(move => ({ ...move })) || [];
+          result.invalidAttempts = evaluation?.firstInvalid ? [{ ...evaluation.firstInvalid }] : [];
+          result.solved = Boolean(evaluation?.solved);
+          result.firstMoveLatencyMs = result.actualLegalMoves ? result.responses[0].time - result.responseWindowOnset : null;
+          result.endReason = result.solved ? "solved" : submittedAt === null ? "timeout" :
+            evaluation.firstInvalid ? "illegal-move" : "not-solved";
+          result.excessMoves = result.solved ? result.actualLegalMoves - item.optimalMoves : null;
+        }
+      });
+    } finally {
+      status.textContent = "";
+      status.classList.remove("tower-plan");
+      status.style.bottom = "";
+    }
+    if (practice || ctx.mode === "training") {
+      if (row.solved) await replayTowerPlan(ctx, item, evaluation, portrait, boardCache);
+      else {
+        const sceneFor = makeTowerSceneFactory(item.goalKey, boardCache, towerFrameCanvas(item.moveCap, portrait), portrait);
+        const feedback = towerPlanFeedback(sceneFor(serializeState(row.finalState)), row);
+        const showing = ctx.show(feedback.scene, 1800);
+        status.classList.add("visually-hidden");
+        status.textContent = feedback.message;
+        try { await showing; }
+        finally { status.textContent = ""; status.classList.remove("visually-hidden"); }
+      }
+    }
+    return row;
   }
 
   const rotationMetric = (rows, angle) => {
@@ -627,6 +805,7 @@
     solve: (start, goal) => solveTower(start, goal),
     distance: (start, goal) => towerDistances.get(`${typeof start === "string" ? start : serializeState(start)}>${typeof goal === "string" ? goal : serializeState(goal)}`),
     generate: options => generateTowerPair(options),
+    evaluatePlan: evaluateTowerPlan,
     diameter: towerDiameter
   };
 
@@ -730,6 +909,7 @@
   });
 
   C.define("tower-london", "reasoning", {
+    planningMode: choice(["visible", "mental"]),
     trials: p(18, 3, 60, 3),
     startMoves: p(2, 1, towerDiameter),
     minMoves: p(1, 1, towerDiameter),
@@ -744,15 +924,19 @@
     staircase: "stepwise",
     validateParams: q => q.minMoves > q.startMoves || q.startMoves > q.maxMoves || q.maxMoves > towerDiameter ? "tower.invalidRange" : null,
     async run(ctx) {
-      const q = ctx.params, practice = ctx.phase === "practice";
+      const q = ctx.params, practice = ctx.phase === "practice", mental = q.planningMode === "mental";
       const count = practice ? PRACTICE_TRIALS : q.trials;
       if (!count) return { stimulusSet: "spatial" };
-      const panel = ctx.prepareOptions(D.options(["1", "2", "3"], ["1", "2", "3"]));
+      const options = D.options(["1", "2", "3"], ["1", "2", "3"]);
+      if (mental) options.push({ value: "back", key: "Backspace", label: C.t("tower.undo") },
+        { value: "done", key: "Enter", label: C.t("tower.submit") });
+      const panel = ctx.prepareOptions(options, mental ? "tower-plan" : "standard");
+      if (mental) panel.statusHeight = 104;
       const state = ctx.state("tower-distance", "stepwise", { start: q.startMoves, min: q.minMoves, max: q.maxMoves });
       const boardCache = new Map();
       const portrait = ctx.w < 600 && ctx.h >= ctx.w;
       const frames = new Map(range(1, towerDiameter).map(distance =>
-        [distance, towerFrameCanvas(distance + q.maxExtraMoves, portrait)]));
+        [distance, towerFrameCanvas(distance + q.maxExtraMoves, portrait, mental ? "tower.start" : "tower.current")]));
       const sceneFactories = new Map();
       const usedPairs = new Set();
       const practiceDistances = [1, 1, 2, 2, 3, 3, 2, 3];
@@ -778,7 +962,7 @@
         let selectedPeg = -1;
         let endReason = null;
         const invalidAttempts = [];
-        const row = await ctx.trial({
+        const row = mental ? await runTowerPlan(ctx, item, panel, practice, portrait, boardCache) : await ctx.trial({
           scene: item.sceneFor(currentKey, selectedPeg),
           panel,
           deadline: q.responseMs,
@@ -825,6 +1009,7 @@
             optimalMoves: item.optimalMoves,
             optimalPath: item.path.map(step => ({ ...step })),
             moveCap: item.moveCap,
+            planningMode: "visible",
             condition: item.optimalMoves
           },
           enrich(result) {

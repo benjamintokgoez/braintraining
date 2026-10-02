@@ -103,9 +103,19 @@ async function playPhase(page, phase) {
       if (!current || current.done || current.falseStartPhase || current.responseEnabled === false) return { wait: 250 };
       const elapsed = C.now() - current.startedAt;
       if (elapsed < 208) return { wait: 208 - elapsed };
-      if (elapsed >= current.deadline - 16) return { wait: 32 };
+      if (current.deadline !== null && elapsed >= current.deadline - 16) return { wait: 32 };
       let values;
-      if (current.multi) {
+      if (current.trial.stage === "loci-study") {
+        if (!current.trial.selfPaced) return { wait: current.deadline - elapsed + 32 };
+        values = [current.trial.studyIndex + 1 < current.trial.studyLength ? "next" : "ready"];
+      } else if (current.trial.stage === "loci-recall") {
+        const expected = current.trial.expected;
+        let value = current.responses.length < expected.length ? expected[current.responses.length] : "done";
+        if (typeof value === "number" && !current.options.some(option => option.value === value)) {
+          value = value < current.options[0].value ? "prev" : "next";
+        }
+        values = [value];
+      } else if (current.multi) {
         values = [current.trial.usePosition && current.trial.positionTarget ? 0 : null,
           current.trial.useAudio && current.trial.audioTarget ? 1 : null]
           .filter(value => value !== null && !current.responses.some(response => response.value === value));
@@ -113,9 +123,12 @@ async function playPhase(page, phase) {
       } else if (current.interact) {
         if (ctx.browserTower !== current) { ctx.browserTower = current; ctx.browserSource = true; }
         const move = current.trial.optimalPath[current.responses.length];
-        if (!move) throw new Error("Missing optimal move");
-        values = [(ctx.browserSource ? move.from : move.to) - 1];
-        ctx.browserSource = !ctx.browserSource;
+        if (!move && current.trial.planningMode === "mental") values = ["done"];
+        else {
+          if (!move) throw new Error("Missing optimal move");
+          values = [(ctx.browserSource ? move.from : move.to) - 1];
+          ctx.browserSource = !ctx.browserSource;
+        }
       } else if (current.sequence) {
         const expected = current.trial.expected || current.trial.sequence ||
           String(current.trial.answer).split("").map(value => /^\d$/.test(value) ? Number(value) : value);

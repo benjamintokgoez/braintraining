@@ -20,15 +20,30 @@ function playTask(f, ctx, { practice = false, falseStarts = false, responseMode 
       return;
     }
     if (time - current.startedAt < latency || current.done || current.responseEnabled === false) return;
+    if (current.trial.stage === "loci-study") {
+      if (current.trial.selfPaced) ctx.respond(current.trial.studyIndex + 1 < current.trial.studyLength ? "next" : "ready", ctx.input);
+      return;
+    }
     const mode = typeof responseMode === "function" ? responseMode(current) : responseMode;
     if (mode === "omit") return;
-    if (current.multi) {
+    if (current.trial.stage === "loci-recall") {
+      const expected = current.trial.expected;
+      let value = current.responses.length < expected.length ? expected[current.responses.length] : "done";
+      if (mode === "wrong" && !current.responses.length) {
+        value = current.options.find(option => typeof option.value === "number" && option.value !== value).value;
+      }
+      if (typeof value === "number" && !current.options.some(option => option.value === value)) {
+        value = value < current.options[0].value ? "prev" : "next";
+      }
+      ctx.respond(value, ctx.input);
+    } else if (current.multi) {
       const meta = current.trial;
       if (meta.usePosition && (mode === "wrong" ? !meta.positionTarget : meta.positionTarget)) ctx.respond(0, ctx.input);
       if (meta.useAudio && (mode === "wrong" ? !meta.audioTarget : meta.audioTarget)) ctx.respond(1, ctx.input);
     } else if (current.interact) {
       if (mode === "wrong") return;
       const move = current.trial.optimalPath[current.responses.length];
+      if (!move && current.trial.planningMode === "mental") { ctx.respond("done", ctx.input); return; }
       if (!move) throw new Error("Missing optimal Tower move");
       const sourceSelected = selections.get(current) || false;
       ctx.respond((sourceSelected ? move.to : move.from) - 1, ctx.input);
