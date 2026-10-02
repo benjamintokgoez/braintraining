@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_PREFIX = `cortex-shell-${self.registration.scope}-`;
-const CACHE = `${CACHE_PREFIX}v18`;
+const CACHE = `${CACHE_PREFIX}v19`;
 const ASSETS = [
   "./", "index.html", "styles.css", "i18n.js", "app.js", "manifest.webmanifest",
   "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png",

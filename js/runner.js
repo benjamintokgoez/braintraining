@@ -501,7 +501,7 @@
       svg.innerHTML = markup;
       return { svg };
     }
-    paint(scene, panel, entered = [], counter = null) {
+    paint(scene, panel, entered = [], counter = null, layoutPanel = panel) {
       const g = this.g;
       g.fillStyle = this.palette["task-bg"]; g.fillRect(0, 0, this.w, this.h);
       if (this.visibleSvg) this.visibleSvg.style.visibility = "hidden";
@@ -509,7 +509,7 @@
       if (this.visibleSvg) this.visibleSvg.style.visibility = "visible";
       if (scene && !scene.svg) {
         const areaHeight = Math.min(this.stimulusHeight,
-          panel ? panel.top - (panel.statusHeight ?? (panel.layout === "matches" ? 80 : 42)) : this.stimulusHeight);
+          layoutPanel ? layoutPanel.top - (layoutPanel.statusHeight ?? (layoutPanel.layout === "matches" ? 80 : 42)) : this.stimulusHeight);
         const topMargin = Math.max(72, this.safeTop + 64);
         const maxH = Math.max(20, areaHeight - topMargin - 12);
         const scale = Math.min(1, (this.w - 24) / scene.width, maxH / scene.height);
@@ -561,9 +561,9 @@
     async countdown() {
       for (let i = 2; i >= 0; i--) await C.Timing.wait(1000, this.signal, () => this.paint(this.countdownImages[i]));
     }
-    async show(scene, ms, panel) {
+    async show(scene, ms, panel, layoutPanel = panel) {
       if (!this.current) this.responseStatus.textContent = "";
-      return C.Timing.wait(ms, this.signal, () => this.paint(scene, panel));
+      return C.Timing.wait(ms, this.signal, () => this.paint(scene, panel, [], null, layoutPanel));
     }
     respond(value, method) {
       const current = this.current;
@@ -626,7 +626,7 @@
       let firstOnset = null, stimulusOnset = null;
       trial.phaseOnsets = [];
       for (const phase of spec.phases || []) {
-        const onset = await this.show(phase.scene, phase.ms, phase.panel);
+        const onset = await this.show(phase.scene, phase.ms, phase.panel, phase.layoutPanel);
         firstOnset ??= onset;
         if (phase.stimulus) stimulusOnset = onset;
         trial.phaseOnsets.push({ onset, requestedMs: phase.ms, actualMs: C.now() - onset });

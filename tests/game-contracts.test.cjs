@@ -8,7 +8,7 @@ const { session } = require("./helpers/session.cjs");
 
 const timedIds = fixture().C.Tasks.filter(task => task.kind !== "journal").map(task => task.id);
 const conflictIds = ["stroop-squared", "flanker-squared", "simon-squared"];
-const correctedProtocols = [...conflictIds, "mental-arithmetic", "pvt-b"];
+const correctedProtocols = [...conflictIds, "mental-arithmetic", "pvt-b", "visual-arrays"];
 const processingIds = ["symmetry-span", "operation-span"];
 
 for (const id of timedIds) {
@@ -223,6 +223,44 @@ test("visual arrays compare the color at the probed location and never test gray
   }
 });
 
+test("visual arrays retain the same on-screen position and scale through exposure, delay and probe", async () => {
+  for (const [width, height] of [[320, 568], [390, 844], [844, 390], [568, 320], [1280, 800]]) {
+    const f = fixture({ width, height, touch: width < 1000 }), C = f.C;
+    const task = C.Tasks.find(task => task.id === "visual-arrays");
+    const ctx = f.runner("assessment", width < 1000 ? "touch" : "keyboard", task, { ...task.params, trials: 24 });
+    const paint = ctx.paint.bind(ctx), trial = ctx.trial.bind(ctx);
+    let spec, placements;
+    ctx.paint = (...args) => {
+      const before = f.draws.length;
+      paint(...args);
+      const index = [spec?.phases[0].scene, spec?.phases[1].scene, spec?.scene].indexOf(args[0]);
+      if (index < 0) return;
+      const drawing = f.draws.slice(before).find(draw => draw.method === "drawImage" && draw.args[0] === args[0]);
+      placements[index] = drawing.args.slice(1);
+      if (index < 2) assert.equal(ctx.controls.hidden, true, "Answer controls remain hidden before the probe");
+      else assert.equal(ctx.controls.hidden, false, "Answer controls appear for the probe");
+    };
+    ctx.trial = async next => {
+      spec = next;
+      placements = [];
+      const row = await trial(next);
+      const [exposure, delay, probe] = placements;
+      assert.ok(exposure && delay && probe, "All three display phases are rendered");
+      assert.deepEqual(exposure, probe, `${width}x${height}: the probe uses the exposure's screen transform`);
+      const [x, y, w, h] = exposure;
+      const [delayX, delayY, delayW, delayH] = delay;
+      assert.equal(delayX + delayW / 2, x + w / 2, "The blank delay keeps the same horizontal center");
+      assert.equal(delayY + delayH / 2, y + h / 2, "The blank delay keeps the same vertical center");
+      assert.ok(x >= 0 && x + w <= width && y >= 72 && y + h < next.panel.top);
+      return row;
+    };
+    await playTask(f, ctx, { practice: true });
+    await playTask(f, ctx);
+    assert.ok([...ctx.practiceTrials, ...ctx.trials].every(row => row.correct));
+    await ctx.close();
+  }
+});
+
 test("Corsi and digit span reverse the displayed sequence exactly when backward recall is selected", async () => {
   for (const id of ["corsi", "digit-span"]) for (const direction of ["forward", "backward"]) {
     const f = fixture({ seed: 21 }), task = f.C.Tasks.find(task => task.id === id);
@@ -354,7 +392,7 @@ test("a stop trial whose delayed cue was never displayed cannot change its stair
   await ctx.close();
 });
 
-test("corrected arithmetic, vigilance and conflict protocols stay separate from legacy rounds and warm-ups", async () => {
+test("corrected arithmetic, vigilance, conflict and visual-array protocols stay separate from legacy rounds and warm-ups", async () => {
   for (const id of correctedProtocols) {
     const f = fixture(), task = f.C.Tasks.find(task => task.id === id);
     assert.equal(task.protocolVersion, 3);
@@ -396,10 +434,12 @@ test("the arithmetic training ceiling validates independently and old settings a
 });
 
 test("new task protocols do not borrow legacy staircases, while unchanged protocols keep their state", async () => {
-  for (const id of ["flanker-squared", "digit-span"]) {
+  for (const id of ["flanker-squared", "visual-arrays", "digit-span"]) {
     const f = fixture(), task = f.C.Tasks.find(task => task.id === id);
-    const variant = id === "digit-span" ? "length" : "deadline", type = id === "digit-span" ? "stepwise" : "deadline";
-    const config = id === "digit-span" ? { start: 2, min: 2, max: 12 } : { start: 1000, min: 300, max: 3000 };
+    const variant = id === "digit-span" ? "length" : id === "visual-arrays" ? "exposure" : "deadline";
+    const type = id === "digit-span" ? "stepwise" : id === "visual-arrays" ? "oneUpThreeDown" : "deadline";
+    const config = id === "digit-span" ? { start: 2, min: 2, max: 12 } :
+      id === "visual-arrays" ? { start: 250, min: 50, max: 1000 } : { start: 1000, min: 300, max: 3000 };
     const saved = f.C.Adaptive.create(type, { ...config, start: id === "digit-span" ? 6 : 500 });
     const key = f.C.Adaptive.key(id, f.C.device(), f.C.input, f.C.language, `${f.C.canonical(task.params)}|${variant}`);
     f.C.Storage.setSettings({ staircases: { [key]: saved } });

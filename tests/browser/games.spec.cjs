@@ -122,6 +122,66 @@ for (const [index, id] of timedIds.entries()) {
   });
 }
 
+test("visual-array probes occupy the original square's pixels in portrait and landscape", async ({ page }, testInfo) => {
+  test.setTimeout(180000);
+  await enableClock(page);
+  await page.evaluate(() => {
+    const C = window.Cortex, palette = ["stim-red", "stim-green", "stim-blue", "stim-yellow"];
+    const swatch = document.createElement("canvas");
+    swatch.width = swatch.height = 1;
+    const g = swatch.getContext("2d");
+    const colors = palette.map(key => {
+      g.fillStyle = C.Draw.palette[key]; g.fillRect(0, 0, 1, 1);
+      return [...g.getImageData(0, 0, 1, 1).data];
+    });
+    const paint = C.Runner.prototype.paint;
+    C.Runner.prototype.paint = function (...args) {
+      paint.apply(this, args);
+      const spec = this.browserSpec, scene = args[0];
+      if (this.task.id !== "visual-arrays" || !spec) return;
+      if (scene === spec.phases[0].scene) {
+        this.browserArrayExposure = this.g.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
+        window.arrayDisplays.push({ phase: "exposure", hidden: this.controls.hidden });
+      } else if (scene === spec.phases[1].scene) {
+        window.arrayDisplays.push({ phase: "delay", hidden: this.controls.hidden });
+      } else if (scene === spec.scene) {
+        const probe = this.g.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
+        const before = colors[spec.meta.values[spec.meta.probeIndex]], after = colors[spec.meta.probeColor];
+        let pixels = 0, misplaced = 0;
+        for (let i = 0; i < probe.length; i += 4) {
+          if (!after.every((channel, index) => probe[i + index] === channel)) continue;
+          pixels++;
+          if (!before.every((channel, index) => this.browserArrayExposure[i + index] === channel)) misplaced++;
+        }
+        window.arrayDisplays.push({ phase: "probe", hidden: this.controls.hidden, pixels, misplaced });
+      }
+    };
+  });
+  const input = testInfo.project.name === "desktop" ? "keyboard" : "touch";
+  for (const viewport of [page.viewportSize(), { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await configure(page, "visual-arrays", { input, minimum: true });
+    await page.evaluate(() => { window.arrayDisplays = []; });
+    await page.locator("#start-practice").click();
+    await playPhase(page, "practice");
+    await page.locator("#start-main").click();
+    await playPhase(page, "block");
+    await expect(page.locator(".completion-card")).toBeVisible();
+    const displays = await page.evaluate(() => window.arrayDisplays);
+    for (const phase of ["exposure", "delay", "probe"]) {
+      const rows = displays.filter(row => row.phase === phase);
+      expect(rows, `${viewport.width}x${viewport.height}: ${phase}`).toHaveLength(32);
+      for (const row of rows) {
+        expect(row.hidden).toBe(phase !== "probe");
+        if (phase === "probe") {
+          expect(row.pixels, "The probe is visible").toBeGreaterThan(20);
+          expect(row.misplaced, "Every probe pixel overlays its original target color").toBe(0);
+        }
+      }
+    }
+  }
+});
+
 test("mouse input completes numeric, spatial, dual-stream, planning and vigilance warm-ups", async ({ page }) => {
   test.setTimeout(120000);
   await localSpeech(page);

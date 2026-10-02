@@ -292,7 +292,7 @@
 
   C.define("visual-arrays", "working-memory", { trials: p(72, 24, 144, 12), exposureMs: p(250, 50, 1000, 10),
     retentionMs: p(900, 200, 3000, 50), responseMs: p(3000, 500, 10000, 100) }, {
-    landscape: true, staircase: "oneUpThreeDown", primaryMetric: "kMean", metrics: ["k4","k6","k8","kMean"],
+    protocolVersion: 3, landscape: true, staircase: "oneUpThreeDown", primaryMetric: "kMean", metrics: ["k4","k6","k8","kMean"],
     async run(ctx) {
       const q = ctx.params, practice = ctx.phase === "practice";
       const panel = options(ctx, ["a","l"], ["response.same","response.different"]);
@@ -318,7 +318,8 @@
       await ctx.countdown();
       for (const item of items) {
         const exposureMs = practice || ctx.mode === "assessment" ? q.exposureMs : state.state.value;
-        const row = await ctx.trial({ phases: [{ scene: item.scene, ms: exposureMs }, { scene: ctx.blank, ms: q.retentionMs }],
+        const row = await ctx.trial({ phases: [{ scene: item.scene, ms: exposureMs, layoutPanel: panel },
+          { scene: ctx.blank, ms: q.retentionMs, layoutPanel: panel }],
           scene: item.probe, panel, deadline: q.responseMs, answer: Number(item.changed),
           meta: { setSize: item.setSize, changed: item.changed, distractors: item.distractors, exposureMs,
             cells: item.cells, values: item.values, probeIndex: item.probeIndex, probeColor: item.probeColor } });
