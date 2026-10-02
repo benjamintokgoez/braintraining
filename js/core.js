@@ -84,7 +84,18 @@ window.Cortex = {};
         value.dailyReadingInterests.length > C.readingInterests.length ||
         new Set(value.dailyReadingInterests).size !== value.dailyReadingInterests.length ||
         value.dailyReadingInterests.some(interest => !C.readingInterests.includes(interest)))) return "reading.invalidPreferences";
-    return value.dailyReadingEnabled === true && value.dailyReadingInterests?.length === 0 ? "reading.chooseInterest" : null;
+    return value.dailyReadingEnabled !== false && value.dailyReadingInterests?.length === 0 ? "reading.chooseInterest" : null;
+  };
+  C.readingImageError = image => {
+    if (image === null || image === undefined) return null;
+    return !validObject(image) || typeof image.url !== "string" || image.url.length > 2000 ||
+      !/^https:\/\/(?:upload|thumb)\.wikimedia\.org\/wikipedia\/commons\/(?:thumb\/)?[a-f\d]\/[a-f\d]{2}\//iu.test(image.url) ||
+      typeof image.source !== "string" || image.source.length > 2000 ||
+      !/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/u.test(image.source) ||
+      !Number.isSafeInteger(image.width) || image.width < 1 || image.width > 1024 ||
+      !Number.isSafeInteger(image.height) || image.height < 1 || image.height > 1024 ||
+      typeof image.author !== "string" || image.author.length > 300 ||
+      typeof image.license !== "string" || !image.license.trim() || image.license.length > 80 ? "data.invalid" : null;
   };
   C.readingRecordError = record => {
     if (record === null || record === undefined) return null;
@@ -96,7 +107,9 @@ window.Cortex = {};
       C.wordCount(record.title) > C.readingLimits.titleWords ||
       typeof record.text !== "string" || C.wordCount(record.text) < 25 ||
       record.text.length > C.readingLimits.characters || C.wordCount(record.text) > C.readingLimits.words ||
-      typeof record.shortened !== "boolean" ? "data.invalid" : null;
+      typeof record.shortened !== "boolean" || C.readingImageError(record.image) ||
+      record.imageUnavailable !== undefined && typeof record.imageUnavailable !== "boolean" ||
+      record.imageChecked !== undefined && typeof record.imageChecked !== "boolean" ? "data.invalid" : null;
   };
 
   const empty = () => ({
@@ -104,7 +117,7 @@ window.Cortex = {};
     settings: { language: navigator.language.toLowerCase().startsWith("de") ? "de" : "en",
       mode: "training", vibration: false, fullscreen: false, theme: "system", colorTheme: "graphite", routineMinutes: 10,
       routineTime: "08:00", routineDays: [1, 2, 3, 4, 5, 6, 0], routineReminders: false, reminderLastDate: null,
-      dailyReadingEnabled: false, dailyReadingInterests: ["science", "technology", "history", "nature"],
+      dailyReadingEnabled: true, dailyReadingInterests: ["science", "technology", "history", "nature"],
       warmupPolicy: "familiar", inputMethod: "auto", favorites: [], practiceReady: {}, taskParams: {}, staircases: {}, notices: {} },
     sessions: [], trials: {}, itemHashes: {}, forecasts: [], routine: null, dailyReading: null
   });

@@ -8,8 +8,14 @@ const introduction = "This is a public encyclopedia introduction about a scienti
   "It describes the ideas and people involved, including the historical context and practical applications in everyday life.";
 const page = (patch = {}) => ({ pageid: 12345, lastrevid: 98765, ns: 0, title: "An interesting discovery",
   extract: introduction, ...patch });
+const imageInfo = (patch = {}) => ({ imagerepository: "shared", imageinfo: [{
+  thumburl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Example.jpg/640px-Example.jpg",
+  descriptionurl: "https://commons.wikimedia.org/wiki/File:Example.jpg", thumbwidth: 640, thumbheight: 360,
+  thumbmime: "image/jpeg", extmetadata: { Artist: { value: "Example photographer" },
+    LicenseShortName: { value: "CC BY-SA 4.0" }, AttributionRequired: { value: "true" } }, ...patch
+}] });
 function enabled(options = {}) {
-  const f = fixture(options);
+  const f = fixture({ online: true, ...options });
   f.C.Storage.setSettings({ dailyReadingEnabled: true, dailyReadingInterests: ["science"] });
   return f;
 }
@@ -25,16 +31,22 @@ function record(f, patch = {}) {
   return f.C.Reading.fromPage(page(), { date: f.C.today(), language: f.C.language, interest: "science", ...patch });
 }
 
-test("legacy and fresh profiles keep Wikipedia disabled without silently rewriting preferences", async () => {
+test("fresh and legacy defaults enable reading without overwriting saved opt-outs or rewriting storage", async () => {
   const f = fixture(), root = f.C.Storage.snapshot();
+  assert.equal(f.C.Storage.getSettings().dailyReadingEnabled, true);
   delete root.settings.dailyReadingEnabled; delete root.settings.dailyReadingInterests; delete root.dailyReading;
   const legacy = fixture({ data: root }), writes = legacy.writes;
-  assert.equal(legacy.C.Storage.getSettings().dailyReadingEnabled, false);
+  assert.equal(legacy.C.Storage.getSettings().dailyReadingEnabled, true);
   assert.deepEqual(plain(legacy.C.Storage.getSettings().dailyReadingInterests), ["science", "technology", "history", "nature"]);
   assert.equal(legacy.C.Storage.getDailyReading(), null);
-  legacy.env.fetch = () => { throw new Error("No Wikipedia request before opt-in"); };
-  assert.equal((await legacy.C.Reading.load()).status, "disabled");
   assert.equal(legacy.writes, writes);
+  legacy.C.Storage.setSettings({ dailyReadingEnabled: false });
+  const optedOut = fixture({ data: legacy.storage.get("cortex.v1"), online: true });
+  optedOut.env.fetch = () => { throw new Error("No Wikipedia request after opting out"); };
+  assert.equal((await optedOut.C.Reading.load()).status, "disabled");
+  await assert.rejects(legacy.C.Storage.importAll({ text: async () => JSON.stringify({
+    ...root, settings: { ...root.settings, dailyReadingInterests: [] }
+  }) }), /data.invalid/);
 });
 
 test("a daily read uses anonymous CORS, a selected interest and the local language, then survives reload without refetching", async () => {
@@ -53,6 +65,8 @@ test("a daily read uses anonymous CORS, a selected interest and the local langua
     assert.equal(url.searchParams.get("gsrsort"), "random");
     assert.equal(url.searchParams.get("gsrnamespace"), "0");
     assert.equal(url.searchParams.get("explaintext"), "1");
+    assert.equal(url.searchParams.get("pilicense"), "free");
+    assert.equal(url.searchParams.get("piprop"), "name");
     assert.equal(request.options.credentials, "omit");
     assert.equal(request.options.referrerPolicy, "no-referrer");
     assert.equal(request.options.redirect, "error");
@@ -98,7 +112,7 @@ test("excerpt bounds are measured, preserve source wording and disclose shorteni
     assert.ok(result.text.length <= f.C.readingLimits.characters);
     assert.ok(f.C.wordCount(result.text) <= f.C.readingLimits.words);
     assert.ok(result.text.length > 0);
-    assert.ok(raw.replace(/\s+/gu, " ").trim().startsWith(result.text.replace(/\.\.\.$/, "")),
+    assert.ok(raw.replace(/\s+/gu, " ").trim().startsWith(result.text.replace(/\s+/gu, " ").replace(/\.\.\.$/, "")),
       "No words are invented, paraphrased or reordered");
     const normalized = raw.replace(/\s+/gu, " ").trim();
     assert.equal(result.shortened, normalized.length > f.C.readingLimits.characters ||
@@ -108,6 +122,104 @@ test("excerpt bounds are measured, preserve source wording and disclose shorteni
   const atLimit = f.C.Reading.excerpt(`${"word ".repeat(179)}end.`, "en");
   assert.equal(atLimit.shortened, false);
   assert.equal(f.C.wordCount(atLimit.text), 180);
+});
+
+test("source paragraphs survive shortening and long blocks split only between unchanged sentences", () => {
+  const f = fixture(), source = `${introduction}\n\n${introduction}\n\n${introduction}`;
+  const excerpt = f.C.Reading.excerpt(source, "en");
+  assert.ok(excerpt.text.includes("\n\n"));
+  for (const text of [excerpt.text, introduction.repeat(5)]) {
+    const paragraphs = f.C.Reading.paragraphs(text, "en");
+    assert.ok(paragraphs.length > 1);
+    assert.equal(paragraphs.join(" ").replace(/\s+/gu, " ").trim(), text.replace(/\s+/gu, " ").trim());
+    assert.ok(paragraphs.every(paragraph => f.C.wordCount(paragraph) <= 65));
+  }
+});
+
+test("a free image uses anonymous metadata requests, credit and safe thumbnail URLs, and survives backup/reload", async () => {
+  const f = enabled(), calls = [];
+  f.env.fetch = async (url, options) => {
+    calls.push({ url: new URL(url), options });
+    const pages = calls.length === 1 ? [page({ pageimage: "Example.jpg" })] : [imageInfo()];
+    return { ok: true, json: async () => ({ query: { pages } }) };
+  };
+  const result = await f.C.Reading.load();
+  assert.equal(result.status, "ready");
+  assert.equal(result.record.image.author, "Example photographer");
+  assert.equal(result.record.image.license, "CC BY-SA 4.0");
+  assert.equal(result.record.imageChecked, true);
+  assert.equal(calls[1].url.searchParams.get("titles"), "File:Example.jpg");
+  assert.equal(calls[1].url.searchParams.get("iiurlwidth"), "640");
+  assert.equal(calls[1].url.searchParams.get("iiurlheight"), "360");
+  for (const call of calls) {
+    assert.equal(call.options.credentials, "omit"); assert.equal(call.options.referrerPolicy, "no-referrer");
+  }
+  await f.C.Reading.load(); assert.equal(calls.length, 2);
+  const restored = fixture();
+  await restored.C.Storage.importAll({ text: async () => JSON.stringify(f.C.Storage.snapshot()) });
+  assert.deepEqual(plain(restored.C.Storage.getDailyReading()), plain(result.record));
+});
+
+test("today's older text-only cache gains an illustration without replacing its article or wording", async () => {
+  const f = enabled(), original = record(f), calls = [];
+  f.C.Storage.setDailyReading(original);
+  f.env.fetch = async url => {
+    const params = new URL(url).searchParams; calls.push(params);
+    return { ok: true, json: async () => ({ query: { pages: params.get("prop") === "pageimages" ?
+      [{ pageid: original.pageId, pageimage: "Example.jpg" }] : [imageInfo()] } }) };
+  };
+  const result = await f.C.Reading.load();
+  assert.equal(result.status, "ready"); assert.equal(result.record.text, original.text);
+  assert.equal(result.record.pageId, original.pageId); assert.equal(result.record.title, original.title);
+  assert.ok(result.record.image); assert.equal(calls[0].get("pageids"), String(original.pageId));
+  await f.C.Reading.load(); assert.equal(calls.length, 2);
+});
+
+test("invalid or incomplete images cannot enter the cache or become remote tracking requests", () => {
+  const f = fixture();
+  for (const patch of [{ thumburl: "https://example.invalid/tracker" },
+    { descriptionurl: "javascript:alert(1)" }, { thumbwidth: -1 }, { thumbmime: "text/html" },
+    { extmetadata: { LicenseShortName: { value: "CC BY-SA 4.0" }, AttributionRequired: { value: "true" } } }]) {
+    assert.equal(f.C.Reading.fromImage(imageInfo(patch)), null);
+  }
+  assert.equal(f.C.Reading.fromImage({ ...imageInfo(), imagerepository: "local" }), null);
+  const image = f.C.Reading.fromImage(imageInfo());
+  assert.ok(f.C.Reading.fromImage(imageInfo({ thumburl: image.url.replace("upload.wikimedia.org", "thumb.wikimedia.org") })));
+  assert.throws(() => f.C.Storage.setDailyReading({ ...record(f), image: { ...image, url: "data:image/svg+xml,bad" } }), /data.invalid/);
+  assert.throws(() => f.C.Reading.imageQueryURL("en", "Example.jpg|Other.jpg"), /Invalid/);
+});
+
+test("missing, failed and timed-out image metadata never discard an otherwise usable read", async () => {
+  for (const failure of ["missing", "http", "timeout"]) {
+    const f = enabled();
+    let requests = 0;
+    f.env.fetch = (_, { signal }) => {
+      if (++requests === 1) return Promise.resolve({ ok: true,
+        json: async () => ({ query: { pages: [page({ pageimage: "Example.jpg" })] } }) });
+      if (failure === "timeout") return new Promise((resolve, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+      return Promise.resolve({ ok: failure !== "http", json: async () => ({ query: { pages: [] } }) });
+    };
+    const pending = f.C.Reading.load();
+    if (failure === "timeout") { await new Promise(setImmediate); f.expire(8000); }
+    const result = await pending;
+    assert.equal(result.status, "ready"); assert.equal(result.record.text, introduction);
+    assert.equal(result.record.imageUnavailable, true); assert.equal(result.record.image, undefined);
+    assert.equal(f.warnings.length, 1);
+    await f.C.Reading.load(); assert.equal(requests, 2);
+  }
+});
+
+test("cancelling an image lookup also discards the uncommitted reading", async () => {
+  const f = enabled();
+  let finish, requests = 0;
+  f.env.fetch = () => ++requests === 1 ? Promise.resolve({ ok: true,
+    json: async () => ({ query: { pages: [page({ pageimage: "Example.jpg" })] } }) }) :
+    new Promise(resolve => { finish = resolve; });
+  const pending = f.C.Reading.load();
+  await new Promise(setImmediate); f.C.Reading.cancel();
+  finish({ ok: true, json: async () => ({ query: { pages: [imageInfo()] } }) });
+  assert.equal((await pending).status, "paused"); assert.equal(f.C.Storage.getDailyReading(), null);
 });
 
 test("unsuitable Wikipedia results cannot become an attributed daily read", async () => {
@@ -165,7 +277,7 @@ test("a current cache arriving during a request wins over the late network respo
     signal = options.signal;
     return new Promise(done => { resolve = done; });
   };
-  const pending = f.C.Reading.load(), saved = { ...record(f), pageId: 67890, title: "A saved discovery" };
+  const pending = f.C.Reading.load(), saved = { ...record(f), pageId: 67890, title: "A saved discovery", imageChecked: true };
   f.C.Storage.setDailyReading(saved);
   assert.deepEqual(plain((await f.C.Reading.load()).record), plain(saved));
   assert.equal(signal.aborted, true);
@@ -284,7 +396,7 @@ test("reading settings, cache, backups and deletion follow local storage validat
   }
   restored.C.Storage.wipe("DELETE");
   assert.equal(restored.C.Storage.getDailyReading(), null);
-  assert.equal(restored.C.Storage.getSettings().dailyReadingEnabled, false);
+  assert.equal(restored.C.Storage.getSettings().dailyReadingEnabled, true);
   const quota = enabled({ quota: true });
   mock(quota);
   const result = await quota.C.Reading.load();

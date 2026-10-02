@@ -855,11 +855,27 @@ legend {
 }
 
 .daily-reading {
-  margin-top: 24px;
+  padding: 24px;
+  min-width: 0;
 }
 
 .daily-reading .section-heading {
   flex-wrap: wrap;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--cp-border);
+}
+
+.daily-reading h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+}
+
+.daily-reading #reading-settings {
+  padding: 8px 12px;
+  font-size: 0.8125rem;
 }
 
 .daily-reading .section-heading > div,
@@ -868,14 +884,78 @@ legend {
   overflow-wrap: anywhere;
 }
 
-.reading-text {
-  max-width: 76ch;
-  font-size: 1rem;
-  line-height: 1.75;
+.daily-reading h3 {
+  margin: 12px 0 8px;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.reading-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--cp-text-muted);
+  font-size: 0.75rem;
+}
+
+.reading-date {
+  margin-bottom: 16px;
+}
+
+.reading-image {
+  margin: 0 0 20px;
+}
+
+.reading-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--cp-border);
+  border-radius: 0.625rem;
+  background: var(--cp-bg-elevated);
+}
+
+.reading-image figcaption {
+  margin-top: 8px;
+  color: var(--cp-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
+.reading-text {
+  max-width: 65ch;
+  font-size: 1rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.reading-text p {
+  margin: 0 0 14px;
+}
+
+.reading-text p:first-child {
+  color: var(--cp-text);
+}
+
 .reading-attribution {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cp-border);
+  font-size: 0.6875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.reading-context {
+  margin-top: 8px;
+  color: var(--cp-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -2217,7 +2297,7 @@ html[data-theme="dark"] textarea::placeholder {
   }
 
   .morning-grid > aside {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

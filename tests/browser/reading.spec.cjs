@@ -2,17 +2,34 @@
 
 const { test, expect } = require("@playwright/test");
 const { createStaticServer } = require("../../scripts/serve.cjs");
-const { open, enableClock, noOverflow, capture, contrastFailures } = require("./helpers.cjs");
+const { readFileSync } = require("node:fs");
+const path = require("node:path");
+const { open: openApp, enableClock: enableAppClock, noOverflow, capture, contrastFailures } = require("./helpers.cjs");
+const open = (page, hash, origin) => openApp(page, hash, origin, { mockReading: false });
+const enableClock = page => enableAppClock(page, { mockReading: false });
 const introduction = "This is an encyclopedia introduction about a scientific discovery and its development. " +
   "It describes the ideas and people involved, including the historical context and practical applications in everyday life. ";
 
-async function wikipedia(page, { fail = false, hold = false, malicious = false } = {}) {
+const imageURL = "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Example.png/640px-Example.png";
+async function wikipedia(page, { fail = false, hold = false, malicious = false, image = false,
+  imageMetadataFails = false, imageDownloadFails = false } = {}) {
   const calls = [], held = [];
   const reply = route => route.fulfill({
     status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" },
-    body: JSON.stringify(fail ? { error: { code: "maxlag", info: "Please wait" } } : {
-      query: { pages: [{ pageid: 12345 + calls.length, lastrevid: 98765, ns: 0,
+    body: JSON.stringify(fail || imageMetadataFails && new URL(route.request().url()).searchParams.get("prop") === "imageinfo" ?
+      { error: { code: "maxlag", info: "Please wait" } } :
+      new URL(route.request().url()).searchParams.get("prop") === "imageinfo" ? {
+        query: { pages: [{ imagerepository: "shared", imageinfo: [{ thumburl: imageURL,
+          descriptionurl: "https://commons.wikimedia.org/wiki/File:Example.png", thumbwidth: 640, thumbheight: 360,
+          thumbmime: "image/png", extmetadata: {
+            Artist: { value: '<a href="https://example.invalid">A photographer &amp; colleague</a><script>window.readingInjected=true</script><img src="https://example.invalid/tracker" onerror="window.readingInjected=true">' },
+            LicenseShortName: { value: "CC BY-SA 3.0" }, AttributionRequired: { value: "true" }
+          } }] }] }
+      } : {
+      query: { pages: [{ pageid: new URL(route.request().url()).searchParams.get("prop") === "pageimages" ?
+        Number(new URL(route.request().url()).searchParams.get("pageids")) : 12345 + calls.length, lastrevid: 98765, ns: 0,
         title: malicious ? 'Discovery <img src=x onerror="window.readingInjected=true">' : "An interesting discovery",
+        ...(image ? { pageimage: "Example.png" } : {}),
         extract: malicious ? `${introduction}<script>window.readingInjected=true</script> ${introduction}` : introduction.repeat(18) }] }
     })
   });
@@ -22,18 +39,19 @@ async function wikipedia(page, { fail = false, hold = false, malicious = false }
     if (hold) held.push(() => reply(route));
     else await reply(route);
   });
-  return { calls, held, success: () => { fail = false; hold = false; } };
+  const imageCalls = [];
+  if (image) await page.route(imageURL, async route => {
+    imageCalls.push({ headers: await route.request().allHeaders() });
+    await route.fulfill(imageDownloadFails ? { status: 404 } : { contentType: "image/png",
+      headers: { "access-control-allow-origin": "*" },
+      body: readFileSync(path.join(__dirname, "../../icons/icon-192.png")) });
+  });
+  return { calls, held, imageCalls, success: () => { fail = false; hold = false; } };
 }
 async function interests(page, selected) {
   for (const input of await page.locator('[name="dailyReadingInterests"]').all()) {
     await input.setChecked(selected.includes(await input.getAttribute("value")));
   }
-}
-async function enable(page, selected = ["science"]) {
-  await page.locator("#reading-settings").click();
-  await page.locator('[name="dailyReadingEnabled"]').check();
-  await interests(page, selected);
-  await page.locator("#save-preferences").click();
 }
 async function ready(page) {
   await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "ready");
@@ -50,26 +68,36 @@ test.describe("Wikipedia API", () => {
   // WebKit cannot route page requests forwarded through a service worker.
   test.use({ serviceWorkers: "block" });
 
-  test("Wikipedia is opt-in, interests validate, drafts cancel and a bounded attributed daily read survives reload", async ({ page }, testInfo) => {
+  test("Wikipedia is enabled by default, saved opt-outs persist and interests and attributed reads survive reload", async ({ page }, testInfo) => {
     const wiki = await wikipedia(page);
     await open(page);
-    await expect(page.locator("#daily-reading")).toContainText("no AI");
-    expect(wiki.calls).toHaveLength(0);
+    await ready(page);
+    const initialInterest = await page.evaluate(() => window.Cortex.Storage.getDailyReading().interest);
+    expect(wiki.calls).toHaveLength(1);
     await page.locator("#reading-settings").click();
-    await expect(page.locator('[name="dailyReadingEnabled"]')).not.toBeChecked();
+    await expect(page.locator('[name="dailyReadingEnabled"]')).toBeChecked();
     await expect(page.locator("#reading-privacy")).toContainText("IP address");
-    await page.locator('[name="dailyReadingEnabled"]').check();
+    await page.locator('[name="dailyReadingEnabled"]').uncheck();
     await interests(page, ["politics", "celebrities"]);
     await page.locator("#cancel-preferences").click();
     await expect(page.locator("#reading-settings")).toBeFocused();
-    expect(wiki.calls).toHaveLength(0);
-    expect(await page.evaluate(() => window.Cortex.Storage.getSettings().dailyReadingEnabled)).toBe(false);
+    expect(wiki.calls).toHaveLength(1);
+    expect(await page.evaluate(() => window.Cortex.Storage.getSettings().dailyReadingEnabled)).toBe(true);
     await page.locator("#reading-settings").click();
+    await page.locator('[name="dailyReadingEnabled"]').uncheck();
+    await interests(page, []);
+    await page.locator("#save-preferences").click();
+    await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "disabled");
+    await page.reload();
+    await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "disabled");
+    expect(wiki.calls).toHaveLength(1);
+    await page.locator("#reading-settings").click();
+    await expect(page.locator('[name="dailyReadingEnabled"]')).not.toBeChecked();
     await page.locator('[name="dailyReadingEnabled"]').check();
     await interests(page, []);
     await page.locator("#save-preferences").click();
     await expect(page.locator("#preferences-error")).toContainText("at least one interest");
-    expect(wiki.calls).toHaveLength(0);
+    expect(wiki.calls).toHaveLength(1);
     await interests(page, ["science"]);
     await page.locator("#save-preferences").click();
     await ready(page);
@@ -88,24 +116,24 @@ test.describe("Wikipedia API", () => {
     expect(bounded.characters).toBeLessThanOrEqual(1400);
     expect(bounded.seconds).toBeLessThanOrEqual(120);
     expect(bounded.sessions).toBe(0);
-    expect(wiki.calls).toHaveLength(1);
-    expect(wiki.calls[0].method).toBe("GET");
-    expect(wiki.calls[0].body).toBeNull();
-    expect(wiki.calls[0].headers.cookie).toBeUndefined();
-    expect(wiki.calls[0].headers.referer).toBeUndefined();
-    expect(new URL(wiki.calls[0].url).searchParams.get("gsrsearch")).toContain("Biological processes");
+    const requests = initialInterest === "science" ? 1 : 2;
+    expect(wiki.calls).toHaveLength(requests);
+    for (const request of wiki.calls) {
+      expect(request.method).toBe("GET"); expect(request.body).toBeNull();
+      expect(request.headers.cookie).toBeUndefined(); expect(request.headers.referer).toBeUndefined();
+    }
+    expect(new URL(wiki.calls.at(-1).url).searchParams.get("gsrsearch")).toContain("Biological processes");
     await capture(page, testInfo, "daily-wikipedia-read");
     await page.reload();
     await ready(page);
     expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toEqual(bounded.record);
-    expect(wiki.calls).toHaveLength(1);
+    expect(wiki.calls).toHaveLength(requests);
     await noOverflow(page);
   });
 
   test("API failures, slow requests, retries and disabling stay explicit and never block training", async ({ page }) => {
     const wiki = await wikipedia(page, { fail: true });
     await enableClock(page);
-    await enable(page);
     await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "error");
     await expect(page.locator("#daily-reading-content")).toContainText("Your training still works");
     expect(wiki.calls).toHaveLength(1);
@@ -138,7 +166,6 @@ test.describe("Wikipedia API", () => {
   test("in-flight Wikipedia reads are cancelled on navigation and time out with a retry, not a fabricated fact", async ({ page }) => {
     const wiki = await wikipedia(page, { hold: true });
     await enableClock(page);
-    await enable(page);
     await expect.poll(() => wiki.calls.length).toBe(1);
     await open(page, "library");
     expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toBeNull();
@@ -158,7 +185,6 @@ test.describe("Wikipedia API", () => {
   test("untrusted extract text stays literal and both languages, themes and narrow layouts remain readable", async ({ page }, testInfo) => {
     const wiki = await wikipedia(page, { malicious: true });
     await open(page);
-    await enable(page);
     await ready(page);
     await expect(page.locator("#daily-reading h3")).toContainText("<img");
     await expect(page.locator(".reading-text")).toContainText("<script>");
@@ -185,6 +211,82 @@ test.describe("Wikipedia API", () => {
     expect(wiki.calls.some(call => new URL(call.url).hostname === "de.wikipedia.org")).toBe(true);
     await capture(page, testInfo, "daily-read-320-dark-german");
   });
+
+  test("an attributed free image and short paragraphs form a readable sidebar above weekly activity", async ({ page }, testInfo) => {
+    const external = [];
+    page.on("request", request => { if (request.url().includes("example.invalid")) external.push(request.url()); });
+    const wiki = await wikipedia(page, { image: true });
+    await open(page);
+    await ready(page);
+    await page.locator("#reading-image").scrollIntoViewIfNeeded();
+    await expect.poll(() => page.locator("#reading-image").evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+    await expect(page.locator(".reading-image figcaption")).toHaveText("A photographer & colleague · CC BY-SA 3.0");
+    expect(await page.evaluate(() => window.readingInjected)).toBeUndefined();
+    expect(external).toEqual([]);
+    expect(wiki.calls).toHaveLength(2);
+    expect(wiki.imageCalls).toHaveLength(1);
+    expect(wiki.imageCalls[0].headers.cookie).toBeUndefined();
+    expect(wiki.imageCalls[0].headers.referer).toBeUndefined();
+    expect(new URL(wiki.calls[0].url).searchParams.get("pilicense")).toBe("free");
+    expect(await page.locator(".reading-text p").count()).toBeGreaterThan(1);
+    const layout = await page.evaluate(() => {
+      const reading = document.getElementById("daily-reading"), practice = document.querySelector(".routine-card"),
+        week = document.querySelector(".consistency-card");
+      return { reading: reading.getBoundingClientRect().toJSON(), practice: practice.getBoundingClientRect().toJSON(),
+        week: week.getBoundingClientRect().toJSON(), sidebar: reading.parentElement.classList.contains("morning-sidebar"),
+        font: parseFloat(getComputedStyle(document.querySelector(".reading-text")).fontSize) };
+    });
+    expect(layout.sidebar).toBe(true); expect(layout.week.top).toBeGreaterThanOrEqual(layout.reading.bottom);
+    if (testInfo.project.name === "desktop") {
+      expect(layout.reading.left).toBeGreaterThanOrEqual(layout.practice.right);
+      expect(Math.abs(layout.reading.top - layout.practice.top)).toBeLessThan(2);
+    }
+    expect(layout.font).toBeGreaterThanOrEqual(15);
+    await noOverflow(page);
+    expect(await contrastFailures(page)).toEqual([]);
+    await capture(page, testInfo, "reading-sidebar-with-image");
+    const saved = await page.evaluate(() => window.Cortex.Storage.getDailyReading());
+    await page.reload();
+    await ready(page);
+    expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toEqual(saved);
+    expect(wiki.calls).toHaveLength(2);
+    await page.evaluate(() => {
+      const C = window.Cortex, record = C.Storage.getDailyReading();
+      delete record.image; delete record.imageChecked;
+      C.Storage.setDailyReading(record); C.UI.render();
+    });
+    await ready(page);
+    expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toEqual(saved);
+    expect(wiki.calls).toHaveLength(4);
+    expect(new URL(wiki.calls[2].url).searchParams.get("pageids")).toBe(String(saved.pageId));
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.evaluate(() => {
+      const C = window.Cortex; C.Storage.setSettings({ theme: "dark" }); C.UI.syncPreferences(); C.UI.render();
+    });
+    await ready(page);
+    await noOverflow(page);
+    expect(await contrastFailures(page)).toEqual([]);
+    await capture(page, testInfo, "reading-image-320");
+  });
+
+  test("failed image metadata and image downloads leave the text readable with an explicit notice", async ({ page }) => {
+    const wiki = await wikipedia(page, { image: true, imageMetadataFails: true });
+    await open(page); await ready(page);
+    await expect(page.locator("#reading-image")).toHaveCount(0);
+    await expect(page.locator("#reading-image-error")).toBeVisible();
+    await expect(page.locator(".reading-text")).toBeVisible();
+    expect(wiki.calls).toHaveLength(2);
+    await page.reload(); await ready(page);
+    expect(wiki.calls).toHaveLength(2);
+    await wikipedia(page, { image: true, imageDownloadFails: true });
+    await page.evaluate(() => { window.Cortex.Storage.setDailyReading(null); window.Cortex.UI.render(); });
+    await ready(page);
+    await page.locator("#daily-reading").scrollIntoViewIfNeeded();
+    await expect(page.locator(".reading-image")).not.toBeVisible();
+    await expect(page.locator("#reading-image-error")).toBeVisible();
+    await expect(page.locator(".reading-text")).toBeVisible();
+    await noOverflow(page);
+  });
 });
 
 test("the installed app reopens a saved Wikipedia read offline and dates older cached selections honestly", async ({ page, context, browserName }) => {
@@ -197,6 +299,9 @@ test("the installed app reopens a saved Wikipedia read offline and dates older c
   });
   const wiki = await wikipedia(page);
   try {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    });
     await open(page, "home", origin);
     await page.evaluate(async () => {
       await navigator.serviceWorker.ready;
@@ -208,6 +313,9 @@ test("the installed app reopens a saved Wikipedia read offline and dates older c
       const record = C.Reading.fromPage({ pageid: 12345, lastrevid: 98765, ns: 0,
         title: "An interesting discovery", extract: introduction },
       { date: C.today(), language: "en", interest: "science" });
+      record.image = { url: "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Example.png/640px-Example.png",
+        source: "https://commons.wikimedia.org/wiki/File:Example.png", width: 640, height: 360,
+        author: "A photographer", license: "CC BY-SA 3.0" };
       C.Storage.setDailyReading(record);
       C.Storage.setSettings({ dailyReadingEnabled: true, dailyReadingInterests: ["science"] });
       C.UI.syncPreferences(); C.UI.render();
@@ -223,6 +331,7 @@ test("the installed app reopens a saved Wikipedia read offline and dates older c
     expect(response.fromServiceWorker()).toBe(true);
     await ready(page);
     expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toEqual(saved);
+    await expect(page.locator("#reading-image")).toHaveCount(0);
     expect(wiki.calls).toHaveLength(0);
     await page.evaluate(() => {
       const C = window.Cortex, today = C.today;

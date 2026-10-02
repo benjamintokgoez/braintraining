@@ -2,7 +2,25 @@
 
 const { expect } = require("@playwright/test");
 
-async function open(page, hash = "home", origin = "") {
+async function open(page, hash = "home", origin = "", { mockReading = true } = {}) {
+  if (mockReading && !page.readingMockInstalled) {
+    page.readingMockInstalled = true;
+    await page.addInitScript(() => {
+      const original = window.fetch.bind(window);
+      window.fetch = (resource, options) => {
+        const url = new URL(resource instanceof Request ? resource.url : resource, location.href);
+        if (["en.wikipedia.org", "de.wikipedia.org"].includes(url.hostname) && url.pathname === "/w/api.php") {
+          const extract = "This deterministic encyclopedia excerpt is used only in browser tests. " +
+            "It lets the homepage display the enabled daily reading feature without relying on a public service. " +
+            "Separate reading tests exercise anonymous API requests, source attribution, illustrations, errors and the offline cache.";
+          return Promise.resolve(new Response(JSON.stringify({ query: { pages: Array.from({ length: 8 }, (_, index) => ({
+            pageid: 12345 + index, lastrevid: 98765, ns: 0, title: "A daily discovery", extract
+          })) } }), { headers: { "Content-Type": "application/json" } }));
+        }
+        return original(resource, options);
+      };
+    });
+  }
   await page.goto(`${origin}/#${hash}`);
   await expect(page.locator("#app h1")).toBeVisible();
 }
@@ -75,12 +93,12 @@ async function capture(page, testInfo, name) {
   await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true, animations: "disabled" });
 }
 
-async function enableClock(page) {
+async function enableClock(page, options = {}) {
   await page.addInitScript(() => {
     Object.defineProperty(performance, "timeOrigin", { value: Date.UTC(2026, 0, 9, 8) });
   });
   await page.clock.install();
-  await open(page);
+  await open(page, "home", "", options);
   await page.clock.runFor(600);
   await page.waitForFunction(() => window.Cortex.Timing.refreshHz > 0);
   await page.evaluate(() => {

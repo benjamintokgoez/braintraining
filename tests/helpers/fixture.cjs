@@ -52,6 +52,9 @@ function fixture(options = {}) {
         for (const match of entries) nodes.set(match[2], element(match[1]));
       }
     });
+    if (tag === "template") Object.defineProperty(node, "content", {
+      get: () => ({ textContent: markup, querySelectorAll: () => [] })
+    });
     return node;
   };
   const speech = Object.assign(new EventTarget(), {
@@ -74,7 +77,7 @@ function fixture(options = {}) {
     console: { log() {}, info() {}, warn: (...args) => warnings.push(args), error: (...args) => errors.push(args) },
     Intl, DOMException, AbortController, Event, EventTarget, URL, URLSearchParams, Blob, TextEncoder,
     Math: randomMath, crypto: globalThis.crypto,
-    navigator: { language: options.language || "en", maxTouchPoints: options.touch ? 5 : 0 },
+    navigator: { language: options.language || "en", maxTouchPoints: options.touch ? 5 : 0, onLine: options.online ?? false },
     performance: { timeOrigin: options.epoch || Date.UTC(2026, 0, 1), now: () => time },
     innerWidth: width, innerHeight: height, devicePixelRatio: options.dpr || 1,
     screen: { width, height, orientation: Object.assign(new EventTarget(), { type: width > height ? "landscape-primary" : "portrait-primary" }) },

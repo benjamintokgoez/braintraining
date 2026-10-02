@@ -195,21 +195,37 @@
     const message = result.status === "error" ? result.message : `reading.${result.status}`;
     const stale = record && record.date !== C.today();
     content.innerHTML = `${result.status !== "ready" ? `<p role="status" class="${result.status === "error" ? "notice warning" : "muted"}">
-      ${text(message)}</p>` : ""}${record ? `<div class="section-heading"><h3>${esc(record.title)}</h3>
-      <span class="tag">${text(`reading.interest.${record.interest}`)}</span></div>
-      <p class="fine-print">${text(stale ? "reading.cachedDate" : "reading.todayDate", {
+      ${text(message)}</p>` : ""}${record ? `<div class="reading-meta">
+      <span class="tag">${text(`reading.interest.${record.interest}`)}</span>
+      <span>${text("reading.duration", { count: C.number(Math.max(1, Math.ceil(C.Reading.seconds(record) / 60)), 0) })}</span></div>
+      <h3>${esc(record.title)}</h3><p class="fine-print reading-date">${text(stale ? "reading.cachedDate" : "reading.todayDate", {
         date: new Intl.DateTimeFormat(C.language, { dateStyle: "medium" }).format(new Date(`${record.date}T12:00:00`))
-      })}</p><p class="reading-text">${esc(record.text)}</p>
-      <p class="fine-print">${text(record.shortened ? "reading.shortened" : "reading.excerpt")}</p>
+      })}</p>${record.image && navigator.onLine !== false ? `<figure class="reading-image">
+      <img id="reading-image" src="${esc(record.image.url)}" width="${record.image.width}" height="${record.image.height}"
+        alt="${text("reading.imageAlt", { title: record.title })}" loading="lazy" decoding="async" fetchpriority="low"
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+      <figcaption>${record.image.author ? `${esc(record.image.author)} · ` : ""}
+        <a href="${esc(record.image.source)}" target="_blank" rel="noopener noreferrer">${esc(record.image.license)}</a></figcaption>
+      </figure>` : ""}<p id="reading-image-error" class="fine-print" role="status"
+        ${record.imageUnavailable ? "" : "hidden"}>${text("reading.imageUnavailable")}</p>
+      <div class="reading-text">${C.Reading.paragraphs(record.text, record.language).map(paragraph => `<p>${esc(paragraph)}</p>`).join("\n")}</div>
       <p class="fine-print reading-attribution"><a id="reading-source" href="${esc(C.Reading.sourceURL(record))}"
         target="_blank" rel="noopener noreferrer">${text("reading.source")}</a> ·
       <a href="${esc(C.Reading.historyURL(record))}" target="_blank" rel="noopener noreferrer">${text("reading.contributors")}</a> ·
       <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>
-      <p class="fine-print">${text("reading.context")}</p>
+      <details class="reading-context"><summary>${text(record.shortened ? "reading.shortenedLabel" : "reading.aboutExcerpt")}</summary>
+      <p class="fine-print">${text(record.shortened ? "reading.shortened" : "reading.excerpt")}</p>
+      <p class="fine-print">${text("reading.context")}</p></details>
       ${result.saved === false ? `<p class="notice warning">${text("reading.unsaved")}</p>` : ""}` : ""}
       ${["error", "offline", "paused"].includes(result.status) ? `<button id="reading-retry" class="secondary" type="button">
         ${text("reading.retry")}</button>` : ""}`;
     document.getElementById("reading-retry")?.addEventListener("click", () => { void refreshReading(true); });
+    const image = document.getElementById("reading-image");
+    image?.addEventListener("error", () => {
+      console.warn("Wikipedia illustration could not be displayed:", image.src);
+      image.closest("figure").hidden = true;
+      document.getElementById("reading-image-error").hidden = false;
+    });
   }
   function home() {
     const sessions = C.Storage.getSessions(), activity = weeklyActivity(sessions), routine = C.Routine.preview();
@@ -222,7 +238,7 @@
       <div class="hero-domains">${["working-memory", "attention", "reasoning"].map(domain =>
         `<span data-domain="${domain}">${domainIcon(domain)}${text(`domain.${domain}`)}</span>`).join("")}</div>
       </div>${orbitArt()}</section>
-      <div class="morning-grid"><section class="card routine-card"><div class="section-heading"><div>
+      <div class="morning-grid"><div class="stack morning-practice"><section class="card routine-card"><div class="section-heading"><div>
       <span class="eyebrow">${text("routine.eyebrow")}</span><h2>${text(planned.titleKey)}</h2></div>
       <span class="tag">${icon("clock")}${minutes(routine.minutes)}</span></div>
       ${scheduleHTML(planned)}
@@ -233,18 +249,19 @@
           "routine.start")}${icon("arrow")}</button>
       ${!saved ? `<button id="routine-preferences" class="secondary">${text("routine.adjust")}</button>` : ""}</div>
       <p class="fine-print">${text("routine.estimateNote")}</p></section>
-      <aside class="stack"><section class="card consistency-card"><span class="eyebrow">${text("home.week")}</span>
-      <h2>${text("home.practiceDays", { count: C.number(activity.count) })}</h2>${weekHTML(activity)}
-      <p class="muted">${text("home.consistency")}</p></section>
       <section class="card quiet-card"><div class="library-symbol" aria-hidden="true">${["working-memory", "attention", "learning"].map(domain =>
         `<span data-domain="${domain}">${domainIcon(domain)}</span>`).join("")}</div>
       <h3>${text("home.pickTitle")}</h3><p class="muted">${text("home.pickHelp")}</p>
-      <a href="#library" class="button secondary">${text("home.explore")}</a></section></aside></div>
+      <a href="#library" class="button secondary">${text("home.explore")}</a></section></div>
+      <aside class="stack morning-sidebar">
       <section id="daily-reading" class="card daily-reading" aria-labelledby="daily-reading-heading">
       <div class="section-heading"><div><span class="eyebrow">${text("reading.eyebrow")}</span>
       <h2 id="daily-reading-heading">${text("reading.title")}</h2></div>
       <button id="reading-settings" class="secondary" type="button">${text("reading.settings")}</button></div>
       <div id="daily-reading-content"></div></section>
+      <section class="card consistency-card"><span class="eyebrow">${text("home.week")}</span>
+      <h2>${text("home.practiceDays", { count: C.number(activity.count) })}</h2>${weekHTML(activity)}
+      <p class="muted">${text("home.consistency")}</p></section></aside></div>
       <p class="home-perspective">${text("home.perspective")} <a href="#about">${text("home.evidenceLink")}</a></p>`;
     document.getElementById("start-routine").onclick = () => { C.Reading.cancel(); C.Routine.start(); location.hash = "routine"; };
     document.getElementById("routine-preferences")?.addEventListener("click", openPreferences);
