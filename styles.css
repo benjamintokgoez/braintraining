@@ -863,14 +863,18 @@ legend {
   flex-wrap: wrap;
   align-items: start;
   gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--cp-border);
 }
 
 .daily-reading h2 {
   font-size: 1.25rem;
   line-height: 1.3;
+}
+
+.daily-reading .reading-actions {
+  margin-top: 16px;
 }
 
 .daily-reading #reading-settings {

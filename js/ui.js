@@ -256,9 +256,10 @@
       <aside class="stack morning-sidebar">
       <section id="daily-reading" class="card daily-reading" aria-labelledby="daily-reading-heading">
       <div class="section-heading"><div><span class="eyebrow">${text("reading.eyebrow")}</span>
-      <h2 id="daily-reading-heading">${text("reading.title")}</h2></div>
-      <button id="reading-settings" class="secondary" type="button">${text("reading.settings")}</button></div>
-      <div id="daily-reading-content"></div></section>
+      <h2 id="daily-reading-heading">${text("reading.title")}</h2></div></div>
+      <div id="daily-reading-content"></div>
+      <div class="actions reading-actions"><button id="reading-settings" class="secondary" type="button">
+      ${text("reading.settings")}</button></div></section>
       <section class="card consistency-card"><span class="eyebrow">${text("home.week")}</span>
       <h2>${text("home.practiceDays", { count: C.number(activity.count) })}</h2>${weekHTML(activity)}
       <p class="muted">${text("home.consistency")}</p></section></aside></div>

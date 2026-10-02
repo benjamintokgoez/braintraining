@@ -56,6 +56,15 @@ async function interests(page, selected) {
 async function ready(page) {
   await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "ready");
   await expect(page.locator("#reading-source")).toBeVisible();
+  await readingActionsAtEnd(page);
+}
+async function readingActionsAtEnd(page) {
+  await expect(page.locator("#daily-reading > :last-child > #reading-settings")).toHaveCount(1);
+  await expect(page.locator("#daily-reading .section-heading button")).toHaveCount(0);
+  const gap = await page.evaluate(() => document.getElementById("reading-settings").getBoundingClientRect().top -
+    document.getElementById("daily-reading-content").getBoundingClientRect().bottom);
+  expect(gap).toBeGreaterThanOrEqual(0);
+  expect(gap).toBeLessThanOrEqual(16);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -88,6 +97,7 @@ test.describe("Wikipedia API", () => {
     await interests(page, []);
     await page.locator("#save-preferences").click();
     await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "disabled");
+    await readingActionsAtEnd(page);
     await page.reload();
     await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "disabled");
     expect(wiki.calls).toHaveLength(1);
@@ -135,6 +145,7 @@ test.describe("Wikipedia API", () => {
     const wiki = await wikipedia(page, { fail: true });
     await enableClock(page);
     await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "error");
+    await readingActionsAtEnd(page);
     await expect(page.locator("#daily-reading-content")).toContainText("Your training still works");
     expect(wiki.calls).toHaveLength(1);
     await page.evaluate(() => window.Cortex.UI.render());
@@ -171,6 +182,8 @@ test.describe("Wikipedia API", () => {
     expect(await page.evaluate(() => window.Cortex.Storage.getDailyReading())).toBeNull();
     await open(page, "home");
     await expect.poll(() => wiki.calls.length).toBe(2);
+    await expect(page.locator("#daily-reading-content")).toContainText("Finding today's Wikipedia read");
+    await readingActionsAtEnd(page);
     await page.clock.runFor(8100);
     await expect(page.locator("#daily-reading-content")).toHaveAttribute("data-reading-status", "error");
     await expect(page.locator("#daily-reading-content")).toContainText("too long");
